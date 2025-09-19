@@ -1,5 +1,5 @@
 //! Environment operations: add/get/list/delete/export/run/show/clean
-use crate::cli::{SetKeyValueArgs, SetKeyArgs, SetTargetArgs, ExportArgs, RunArgs};
+use crate::cli::{ProjectKeyValueArgs, ProjectKeyArgs, ProjectTargetArgs, ExportArgs, RunArgs};
 use crate::config::{self, env_enc_path, lock_path};
 use crate::crypto::{self, LockInfo};
 use anyhow::{bail, Result};
@@ -34,7 +34,7 @@ fn write_env_string(map: &BTreeMap<String, String>) -> String {
     out
 }
 
-/// Resolve a set directory from id or name; supports "global".
+/// Resolve a project directory from id or name; supports "global".
 fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     let cfg = config::load_config()?;
     if id_or_name == "global" { return config::global_dir(); }
@@ -42,7 +42,7 @@ fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     if let Some(s) = cfg.sets.iter().find(|s| s.id == id_or_name || s.name == id_or_name) {
         return config::set_dir(&s.id);
     }
-    bail!("set not found: {}", id_or_name)
+    bail!("project not found: {}", id_or_name)
 }
 
 /// Load encryption key for dir (password-derived if locked, else app key). Uses SAFEHOLD_PASSWORD if set.
@@ -62,7 +62,7 @@ fn load_key_for_dir(dir: &PathBuf) -> Result<[u8;32]> {
     }
 }
 
-/// Decrypt and read env map from a set directory.
+/// Decrypt and read env map from a project directory.
 fn read_env_map(dir: &PathBuf) -> Result<BTreeMap<String, String>> {
     let key = load_key_for_dir(dir)?;
     let enc = fs::read(env_enc_path(dir)) .unwrap_or_default();
@@ -71,7 +71,7 @@ fn read_env_map(dir: &PathBuf) -> Result<BTreeMap<String, String>> {
     read_env_map_from_bytes(&pt)
 }
 
-/// Encrypt and write env map to a set directory.
+/// Encrypt and write env map to a project directory.
 fn write_env_map(dir: &PathBuf, map: &BTreeMap<String, String>) -> Result<()> {
     let key = load_key_for_dir(dir)?;
     let s = write_env_string(map);
@@ -80,9 +80,9 @@ fn write_env_map(dir: &PathBuf, map: &BTreeMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-/// Add or replace a key/value in a set. Reads value from stdin if not provided.
-pub fn cmd_add(args: SetKeyValueArgs) -> Result<()> {
-    let dir = resolve_set_dir(&args.set)?;
+/// Add or replace a key/value in a project. Reads value from stdin if not provided.
+pub fn cmd_add(args: ProjectKeyValueArgs) -> Result<()> {
+    let dir = resolve_set_dir(&args.project)?;
     let mut map = read_env_map(&dir)?;
     let value = match args.value {
         Some(v) => v,
@@ -100,24 +100,24 @@ pub fn cmd_add(args: SetKeyValueArgs) -> Result<()> {
 }
 
 /// Print a single value for the given key.
-pub fn cmd_get(args: SetKeyArgs) -> Result<()> {
-    let dir = resolve_set_dir(&args.set)?;
+pub fn cmd_get(args: ProjectKeyArgs) -> Result<()> {
+    let dir = resolve_set_dir(&args.project)?;
     let map = read_env_map(&dir)?;
     if let Some(v) = map.get(&args.key) { println!("{}", v); } else { bail!("key not found"); }
     Ok(())
 }
 
-/// List all key=value pairs in a set.
-pub fn cmd_list(args: SetTargetArgs) -> Result<()> {
-    let dir = resolve_set_dir(&args.set)?;
+/// List all key=value pairs in a project.
+pub fn cmd_list(args: ProjectTargetArgs) -> Result<()> {
+    let dir = resolve_set_dir(&args.project)?;
     let map = read_env_map(&dir)?;
     for (k, v) in map { println!("{}={}", k, v); }
     Ok(())
 }
 
-/// Delete a key in a set (no-op if missing).
-pub fn cmd_delete(args: SetKeyArgs) -> Result<()> {
-    let dir = resolve_set_dir(&args.set)?;
+/// Delete a key in a project (no-op if missing).
+pub fn cmd_delete(args: ProjectKeyArgs) -> Result<()> {
+    let dir = resolve_set_dir(&args.project)?;
     let mut map = read_env_map(&dir)?;
     if map.remove(&args.key).is_some() {
         write_env_map(&dir, &map)?;
@@ -128,11 +128,11 @@ pub fn cmd_delete(args: SetKeyArgs) -> Result<()> {
     Ok(())
 }
 
-/// Export a set or global into a .env file; supports temp mode and overwrite.
+/// Export a project or global into a .env file; supports temp mode and overwrite.
 pub fn cmd_export(args: ExportArgs) -> Result<()> {
     let dir = if args.global { config::global_dir()? } else {
-        let set = args.set.as_deref().ok_or_else(|| anyhow::anyhow!("--set or --global required"))?;
-        resolve_set_dir(set)?
+        let project = args.project.as_deref().ok_or_else(|| anyhow::anyhow!("--project or --global required"))?;
+        resolve_set_dir(project)?
     };
     let pb = styles::spinner("Decrypting and writing .env...");
     let map = read_env_map(&dir)?;
@@ -152,9 +152,9 @@ pub fn cmd_export(args: ExportArgs) -> Result<()> {
     Ok(())
 }
 
-/// Run a program with environment variables injected from a set and optionally from global.
+/// Run a program with environment variables injected from a project and optionally from global.
 pub fn cmd_run(args: RunArgs) -> Result<()> {
-    let dir = resolve_set_dir(&args.set)?;
+    let dir = resolve_set_dir(&args.project)?;
     let mut map = read_env_map(&dir)?;
     if args.with_global {
         let gdir = config::global_dir()?;
@@ -172,14 +172,14 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
-/// Show all sets and their keys to stdout.
+/// Show all projects and their keys to stdout.
 pub fn cmd_show_all() -> Result<()> {
     let cfg = config::load_config()?;
     styles::info("GLOBAL:");
     let gdir = config::global_dir()?;
     if let Ok(map) = read_env_map(&gdir) { for (k,v) in map { println!("  {}={}", k, v); } }
     for s in cfg.sets {
-        styles::info(format!("SET {} ({})", s.id, s.name));
+        styles::info(format!("PROJECT {} ({})", s.id, s.name));
         let dir = config::set_dir(&s.id)?;
         if let Ok(map) = read_env_map(&dir) { for (k,v) in map { println!("  {}={}", k, v); } }
     }

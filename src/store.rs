@@ -1,4 +1,4 @@
-//! Store-level commands: create/list/delete sets, setup, launch
+//! Store-level commands: create/list/delete projects, setup, launch
 use crate::cli::CreateArgs;
 use crate::config::{self, SetMeta};
 use crate::crypto;
@@ -7,7 +7,7 @@ use std::fs;
 use crate::styles;
 use std::process::Command;
 
-/// Create a new set (or configure global).
+/// Create a new project (or configure global).
 pub fn cmd_create(args: CreateArgs) -> Result<()> {
     let base = config::ensure_layout()?;
     crypto::ensure_app_key(&base)?;
@@ -18,14 +18,14 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
     let id = if name == "global" { "global".to_string() } else { config::next_set_id(&name, &cfg.sets) };
 
     let dir = if id == "global" { config::global_dir()? } else { config::set_dir(&id)? };
-    if dir.exists() { bail!("set already exists: {}", id); }
+    if dir.exists() { bail!("project already exists: {}", id); }
     fs::create_dir_all(&dir)?;
 
     if args.lock {
         let password = match args.password {
             Some(p) => p,
             None => {
-                let p = rpassword::prompt_password("Set password: ")?;
+                let p = rpassword::prompt_password("Project password: ")?;
                 p
             }
         };
@@ -42,11 +42,11 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
         config::save_config(&cfg)?;
     }
 
-    styles::ok(format!("Created set {} ({})", id, if args.lock {"locked"} else {"unlocked"}));
+    styles::ok(format!("Created project {} ({})", id, if args.lock {"locked"} else {"unlocked"}));
     Ok(())
 }
 
-/// List all sets (and global).
+/// List all projects (and global).
 pub fn cmd_list_sets() -> Result<()> {
     let cfg = config::load_config()?;
     styles::info("ID\tNAME\tLOCKED");
@@ -57,7 +57,7 @@ pub fn cmd_list_sets() -> Result<()> {
     Ok(())
 }
 
-/// Delete a set by id or the global space.
+/// Delete a project by id or the global space.
 pub fn cmd_delete_set(id: &str) -> Result<()> {
     let mut cfg = config::load_config()?;
     let (is_global, dir) = if id == "global" { (true, config::global_dir()?) } else { (false, config::set_dir(id)?) };
@@ -70,7 +70,7 @@ pub fn cmd_delete_set(id: &str) -> Result<()> {
         cfg.global_locked = false;
     }
     config::save_config(&cfg)?;
-    styles::ok(format!("Deleted set {id}"));
+    styles::ok(format!("Deleted project {id}"));
     Ok(())
 }
 

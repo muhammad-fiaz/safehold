@@ -12,21 +12,21 @@ fn create_unlocked_and_add_get() {
     // create set
     let mut cmd = bin();
     cmd.env("SAFEHOLD_HOME", &home).arg("create").arg("project1");
-    cmd.assert().success().stdout(predicate::str::contains("Created set"));
+    cmd.assert().success().stdout(predicate::str::contains("Created project"));
 
     // add key
     let mut cmd = bin();
-    cmd.env("SAFEHOLD_HOME", &home).args(["add", "-s", "project1", "-k", "API_KEY", "-v", "abc123"]);
+    cmd.env("SAFEHOLD_HOME", &home).args(["add", "-p", "project1", "-k", "API_KEY", "-v", "abc123"]);
     cmd.assert().success().stdout(predicate::str::contains("Added"));
 
     // get key
     let mut cmd = bin();
-    cmd.env("SAFEHOLD_HOME", &home).args(["get", "-s", "project1", "-k", "API_KEY"]);
+    cmd.env("SAFEHOLD_HOME", &home).args(["get", "-p", "project1", "-k", "API_KEY"]);
     cmd.assert().success().stdout("abc123\n");
 
     // list keys
     let mut cmd = bin();
-    cmd.env("SAFEHOLD_HOME", &home).args(["list", "-s", "project1"]);
+    cmd.env("SAFEHOLD_HOME", &home).args(["list", "-p", "project1"]);
     cmd.assert().success().stdout(predicate::str::contains("API_KEY=abc123"));
 }
 
@@ -45,11 +45,11 @@ fn create_locked_and_add_get_with_env_password() {
 
     // add
     let mut cmd = bin();
-    cmd.env("SAFEHOLD_HOME", &home).env("SAFEHOLD_PASSWORD", password).args(["add", "-s", "project2", "-k", "TOKEN", "-v", "xyz"]);
+    cmd.env("SAFEHOLD_HOME", &home).env("SAFEHOLD_PASSWORD", password).args(["add", "-p", "project2", "-k", "TOKEN", "-v", "xyz"]);
     cmd.assert().success();
 
     // get
     let mut cmd = bin();
-    cmd.env("SAFEHOLD_HOME", &home).env("SAFEHOLD_PASSWORD", password).args(["get", "-s", "project2", "-k", "TOKEN"]);
+    cmd.env("SAFEHOLD_HOME", &home).env("SAFEHOLD_PASSWORD", password).args(["get", "-p", "project2", "-k", "TOKEN"]);
     cmd.assert().success().stdout("xyz\n");
 }

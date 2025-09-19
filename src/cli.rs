@@ -28,25 +28,25 @@ pub enum StyleChoice { Fancy, Plain }
 /// All subcommands supported by SafeHold.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Create a new credential set (unlocked by default)
+    /// Create a new credential project (unlocked by default)
     Create(CreateArgs),
-    /// List credential sets
-    ListSets,
-    /// Delete a credential set by ID or name
-    DeleteSet { id: String },
-    /// Add a key/value into a set
-    Add(SetKeyValueArgs),
-    /// Get a value from a set
-    Get(SetKeyArgs),
-    /// List all keys in a set
-    List(SetTargetArgs),
-    /// Delete a key in a set
-    Delete(SetKeyArgs),
+    /// List credential projects
+    ListProjects,
+    /// Delete a credential project by ID or name
+    DeleteProject { id: String },
+    /// Add a key/value into a project
+    Add(ProjectKeyValueArgs),
+    /// Get a value from a project
+    Get(ProjectKeyArgs),
+    /// List all keys in a project
+    List(ProjectTargetArgs),
+    /// Delete a key in a project
+    Delete(ProjectKeyArgs),
     /// Export credentials to .env
     Export(ExportArgs),
     /// Run a command with env vars injected (no file written)
     Run(RunArgs),
-    /// Show all sets and their keys (will prompt for locked)
+    /// Show all projects and their keys (will prompt for locked)
     ShowAll,
     /// Clean stray plaintext .env files in current tree
     Clean,
@@ -59,7 +59,7 @@ pub enum Commands {
 /// Args for `create` command.
 #[derive(Args, Debug)]
 pub struct CreateArgs {
-    /// Set name, or "global" for the global set
+    /// Project name, or "global" for the global project
     pub name: String,
     /// Create as locked with password prompt
     #[arg(long, short='l', action=ArgAction::SetTrue)]
@@ -69,20 +69,20 @@ pub struct CreateArgs {
     pub password: Option<String>,
 }
 
-/// Target-only arg wrapper for commands that operate on a set.
+/// Target-only arg wrapper for commands that operate on a project.
 #[derive(Args, Debug)]
-pub struct SetTargetArgs {
-    /// Set ID or name
-    #[arg(long, short='s')]
-    pub set: String,
+pub struct ProjectTargetArgs {
+    /// Project ID or name
+    #[arg(long, short='p')]
+    pub project: String,
 }
 
-/// Args for commands that need a set and a key.
+/// Args for commands that need a project and a key.
 #[derive(Args, Debug)]
-pub struct SetKeyArgs {
-    /// Set ID or name
-    #[arg(long, short='s')]
-    pub set: String,
+pub struct ProjectKeyArgs {
+    /// Project ID or name
+    #[arg(long, short='p')]
+    pub project: String,
     /// Key name
     #[arg(long, short='k')]
     pub key: String,
@@ -90,10 +90,10 @@ pub struct SetKeyArgs {
 
 /// Args for commands that set a key to a value.
 #[derive(Args, Debug)]
-pub struct SetKeyValueArgs {
-    /// Set ID or name
-    #[arg(long, short='s')]
-    pub set: String,
+pub struct ProjectKeyValueArgs {
+    /// Project ID or name
+    #[arg(long, short='p')]
+    pub project: String,
     /// Key name
     #[arg(long, short='k')]
     pub key: String,
@@ -105,9 +105,9 @@ pub struct SetKeyValueArgs {
 /// Args for exporting .env files.
 #[derive(Args, Debug)]
 pub struct ExportArgs {
-    /// Set ID or name; omit with --global for global
-    #[arg(long, short='s')]
-    pub set: Option<String>,
+    /// Project ID or name; omit with --global for global
+    #[arg(long, short='p')]
+    pub project: Option<String>,
     /// Export global creds
     #[arg(long, action=ArgAction::SetTrue)]
     pub global: bool,
@@ -125,9 +125,9 @@ pub struct ExportArgs {
 /// Args for running a process with injected environment variables.
 #[derive(Args, Debug)]
 pub struct RunArgs {
-    /// Set ID or name
-    #[arg(long, short='s')]
-    pub set: String,
+    /// Project ID or name
+    #[arg(long, short='p')]
+    pub project: String,
     /// Merge in global
     #[arg(long, action=ArgAction::SetTrue)]
     pub with_global: bool,
@@ -147,8 +147,8 @@ pub fn dispatch(cli: Cli) -> Result<()> {
     crate::styles::init(crate::styles::StyleOptions { mode, use_color, quiet: cli.quiet });
     match cli.command {
         Commands::Create(args) => crate::store::cmd_create(args),
-        Commands::ListSets => crate::store::cmd_list_sets(),
-        Commands::DeleteSet { id } => crate::store::cmd_delete_set(&id),
+        Commands::ListProjects => crate::store::cmd_list_sets(),
+        Commands::DeleteProject { id } => crate::store::cmd_delete_set(&id),
         Commands::Add(args) => crate::envops::cmd_add(args),
         Commands::Get(args) => crate::envops::cmd_get(args),
         Commands::List(args) => crate::envops::cmd_list(args),

@@ -39,14 +39,14 @@ pub fn launch_gui() -> Result<()> {
 #[cfg(feature = "gui")]
 struct SafeHoldApp {
     cfg: Config,
-    selected: Option<String>, // "global" or set id
-    maps_cache: HashMap<String, BTreeMap<String, String>>, // set_id_or_global -> map
-    passwords: HashMap<String, String>, // set_id_or_global -> password
-    // create set dialog
+    selected: Option<String>, // "global" or project id
+    maps_cache: HashMap<String, BTreeMap<String, String>>, // project_id_or_global -> map
+    passwords: HashMap<String, String>, // project_id_or_global -> password
+    // create project dialog
     show_create: bool,
-    new_set_name: String,
-    new_set_lock: bool,
-    new_set_password: String,
+    new_project_name: String,
+    new_project_lock: bool,
+    new_project_password: String,
     // kv inputs
     filter: String,
     new_key: String,
@@ -65,9 +65,9 @@ impl SafeHoldApp {
             maps_cache: HashMap::new(),
             passwords: HashMap::new(),
             show_create: false,
-            new_set_name: String::new(),
-            new_set_lock: false,
-            new_set_password: String::new(),
+            new_project_name: String::new(),
+            new_project_lock: false,
+            new_project_password: String::new(),
             filter: String::new(),
             new_key: String::new(),
             new_val: String::new(),
@@ -134,15 +134,15 @@ impl SafeHoldApp {
         match (lock, self.is_locked("global")) {
             (true, false) => {
                 // create lock.json
-                if self.new_set_password.is_empty() {
+                if self.new_project_password.is_empty() {
                     self.message = "Enter password in the field before locking".into();
                     return;
                 }
-                match crypto::create_lock(&self.new_set_password) {
+                match crypto::create_lock(&self.new_project_password) {
                     Ok(li) => {
                         if let Ok(dir) = config::global_dir() {
                             let _ = fs::write(lock_path(&dir), serde_json::to_vec_pretty(&li).unwrap());
-                            self.passwords.insert("global".into(), self.new_set_password.clone());
+                            self.passwords.insert("global".into(), self.new_project_password.clone());
                             self.message = "Global locked".into();
                             self.refresh_config();
                         }
@@ -165,11 +165,11 @@ impl SafeHoldApp {
     }
 
     fn stats(&mut self) -> (usize, usize, Vec<(String, Vec<String>)>) {
-        // total projects, total credentials, duplicates across sets by key name
+        // total projects, total credentials, duplicates across projects by key name
         let total_projects = self.cfg.sets.len();
         let mut total_creds = 0usize;
         let mut occurrences: HashMap<String, Vec<String>> = HashMap::new();
-        // include global as a pseudo-set named "global"
+        // include global as a pseudo-project named "global"
         let mut sets: Vec<(String, PathBuf)> = vec![("global".into(), config::global_dir().unwrap_or_else(|_| PathBuf::new()))];
         for s in &self.cfg.sets {
             if let Ok(dir) = config::set_dir(&s.id) { sets.push((s.id.clone(), dir)); }
@@ -194,13 +194,13 @@ impl App for SafeHoldApp {
             ui.horizontal(|ui| {
                 ui.heading("SafeHold Credential Manager");
                 ui.separator();
-                if ui.button("Create Set").clicked() { self.show_create = true; }
+                if ui.button("Create Project").clicked() { self.show_create = true; }
                 ui.separator();
                 let is_locked = self.is_locked("global");
                 if is_locked {
                     if ui.button("Unlock Global").clicked() { self.lock_unlock_global(false); }
                 } else {
-                    let te = egui::TextEdit::singleline(&mut self.new_set_password).hint_text("Global password");
+                    let te = egui::TextEdit::singleline(&mut self.new_project_password).hint_text("Global password");
                     ui.add(te);
                     if ui.button("Lock Global").clicked() { self.lock_unlock_global(true); }
                 }
@@ -222,7 +222,7 @@ impl App for SafeHoldApp {
                 });
             }
             ui.separator();
-            ui.heading("Sets");
+            ui.heading("Projects");
             for s in self.cfg.sets.clone() {
                 let label = if self.is_locked(&s.id) { format!("{} (locked)", s.name) } else { s.name.clone() };
                 if ui.selectable_label(self.selected.as_deref()==Some(&s.id), label).clicked() {
@@ -230,8 +230,8 @@ impl App for SafeHoldApp {
                 }
                 ui.horizontal(|ui|{
                     if self.selected.as_deref()==Some(&s.id) {
-                        if ui.small_button("Delete set").clicked() {
-                            if let Err(e) = store::cmd_delete_set(&s.id) { self.message = format!("Delete set failed: {}", e); }
+                        if ui.small_button("Delete project").clicked() {
+                            if let Err(e) = store::cmd_delete_set(&s.id) { self.message = format!("Delete project failed: {}", e); }
                             self.refresh_config();
                             self.maps_cache.remove(&s.id);
                             if self.selected.as_deref()==Some(&s.id) { self.selected=None; }
@@ -292,33 +292,33 @@ impl App for SafeHoldApp {
                     if ui.button("Add").clicked() { self.add_kv(&sel); }
                 });
             } else {
-                ui.label("Select a set to view credentials.");
+                ui.label("Select a project to view credentials.");
             }
             if !self.message.is_empty() { ui.separator(); ui.label(&self.message); }
         });
 
-        // create set modal-like area
+        // create project modal-like area
         if self.show_create {
-            egui::Window::new("Create Set").collapsible(false).resizable(false).show(ctx, |ui|{
+            egui::Window::new("Create Project").collapsible(false).resizable(false).show(ctx, |ui|{
                 ui.label("Name:");
-                ui.text_edit_singleline(&mut self.new_set_name);
+                ui.text_edit_singleline(&mut self.new_project_name);
                 ui.horizontal(|ui|{
-                    ui.checkbox(&mut self.new_set_lock, "Lock with password");
-                    if self.new_set_lock { let te = egui::TextEdit::singleline(&mut self.new_set_password).hint_text("password"); ui.add(te); }
+                    ui.checkbox(&mut self.new_project_lock, "Lock with password");
+                    if self.new_project_lock { let te = egui::TextEdit::singleline(&mut self.new_project_password).hint_text("password"); ui.add(te); }
                 });
                 ui.horizontal(|ui|{
                     if ui.button("Create").clicked() {
-                        let args = CreateArgs { name: self.new_set_name.clone(), lock: self.new_set_lock, password: if self.new_set_lock { Some(self.new_set_password.clone()) } else { None } };
+                        let args = CreateArgs { name: self.new_project_name.clone(), lock: self.new_project_lock, password: if self.new_project_lock { Some(self.new_project_password.clone()) } else { None } };
                         match store::cmd_create(args) {
                             Ok(()) => {
-                                self.message = "Set created".into();
+                                self.message = "Project created".into();
                                 // after refresh, resolve id by name to store password mapping under id
-                                self.new_set_name.clear(); self.new_set_password.clear(); self.new_set_lock=false;
+                                self.new_project_name.clear(); self.new_project_password.clear(); self.new_project_lock=false;
                                 self.show_create = false;
                                 self.refresh_config();
-                                if self.new_set_lock {
-                                    if let Some(s) = self.cfg.sets.iter().find(|s| s.name == self.new_set_name) {
-                                        self.passwords.insert(s.id.clone(), self.new_set_password.clone());
+                                if self.new_project_lock {
+                                    if let Some(s) = self.cfg.sets.iter().find(|s| s.name == self.new_project_name) {
+                                        self.passwords.insert(s.id.clone(), self.new_project_password.clone());
                                     }
                                 }
                             }
@@ -339,7 +339,7 @@ impl App for SafeHoldApp {
                 ui.label(format!("Total credentials: {}", total_creds));
             });
             if !dups.is_empty() {
-                ui.collapsing("Duplicate keys across sets", |ui|{
+                ui.collapsing("Duplicate keys across projects", |ui|{
                     for (k, sets) in dups {
                         ui.label(format!("{} -> {:?}", k, sets));
                     }

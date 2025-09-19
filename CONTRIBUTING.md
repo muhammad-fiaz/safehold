@@ -49,16 +49,20 @@ This project follows a code of conduct to ensure a welcoming environment for all
 
 ### Building the Project
 
+SafeHold supports two build modes:
+
 ```bash
-# Build CLI only (default)
+# Build CLI only (default - smaller binary, no GUI dependencies)
 cargo build
 
-# Build with GUI support
+# Build with GUI support (includes eframe/egui for graphical interface)
 cargo build --features gui
 
 # Build optimized release version
 cargo build --release --features gui
 ```
+
+**Note**: The GUI feature adds dependencies and increases binary size. Use `--features gui` only when you need the graphical interface.
 
 ### Running Tests
 
@@ -143,6 +147,8 @@ Examples:
 - `feat: add support for environment variable export`
 - `fix: resolve memory leak in GUI component`
 - `docs: update installation instructions`
+- `feat: add --project flag for better CLI consistency`
+- `refactor: rename 'sets' to 'projects' throughout codebase`
 
 ## Testing
 
@@ -155,23 +161,48 @@ cargo test
 # Run integration tests only
 cargo test --test cli_basic
 cargo test --test cli_export_run
+cargo test --test cli_setup_launch
 
 # Run with environment overrides for testing
 SAFEHOLD_HOME=/tmp/test cargo test
+
+# Test PATH functionality in dry-run mode
+SAFEHOLD_PATH_DRY_RUN=1 cargo test
 ```
 
 ### Test Coverage
 
 - **Unit tests**: Test individual functions and modules
-- **Integration tests**: Test CLI commands and workflows. Include tests for `setup` (with `--add-path` using `SAFEHOLD_PATH_DRY_RUN=1`) and `launch --gui` when the GUI feature is not compiled, which should print a reinstall hint.
+- **Integration tests**: Test CLI commands and workflows
+  - Basic CLI operations (create, add, get, list, delete)
+  - Export and run functionality
+  - Setup with `--add-path` (use `SAFEHOLD_PATH_DRY_RUN=1` for safe testing)
+  - Launch `--gui` without GUI feature (should show reinstall hint)
 - **GUI tests**: Manual testing of GUI features (automated GUI testing is complex)
+- **Cross-platform**: Test on Windows, macOS, and Linux
+
+### Testing Different Build Modes
+
+```bash
+# Test CLI-only build
+cargo build
+cargo test
+
+# Test GUI build
+cargo build --features gui
+cargo test
+
+# Test GUI launch (requires GUI build)
+./target/debug/safehold launch --gui
+```
 
 ### Adding Tests
 
 - Add unit tests for new functions
 - Add integration tests for new CLI commands
-- Ensure tests don't rely on global state
+- Ensure tests work with both CLI and GUI builds
 - Use temporary directories for file operations
+- Test error conditions and edge cases
 
 ## Code Style
 
@@ -193,18 +224,21 @@ SAFEHOLD_HOME=/tmp/test cargo test
 - **Feature flags**: Use feature flags appropriately (CLI vs GUI). The GUI must compile and run only when the `gui` feature is enabled; otherwise `safehold launch --gui` should print a helpful reinstall hint.
 - **Cross-platform**: Ensure code works on Windows, macOS, and Linux
 - **PATH updates**: `safehold setup --add-path` attempts to add Cargo's bin directory to PATH. For tests and local development safety, respect `SAFEHOLD_PATH_DRY_RUN=1` to avoid mutating your environment.
+- **Terminology**: Use "projects" instead of "sets" in user-facing text, help messages, and documentation for better clarity
+- **CLI flags**: Use `--project` (short: `-p`) for consistency with the GUI
+- **Data safety**: Never delete or modify user data during updates. Data is stored separately in `~/.safehold/` and should be preserved across installations.
 
 ### Code Organization
 
 ```
 src/
 ├── main.rs          # Entry point
-├── cli.rs           # CLI argument parsing and dispatch
+├── cli.rs           # CLI argument parsing and dispatch (uses --project flags)
 ├── config.rs        # Configuration and file paths
 ├── crypto.rs        # Encryption/decryption logic
-├── store.rs         # Set management operations
-├── envops.rs        # Environment variable operations
-├── ui.rs            # GUI implementation (optional)
+├── store.rs         # Project management operations
+├── envops.rs        # Environment variable operations (handles project CRUD)
+├── ui.rs            # GUI implementation (optional, uses "Projects" terminology)
 └── lib.rs           # Library interface (if needed)
 ```
 
@@ -267,8 +301,14 @@ For feature requests:
 For security-related issues:
 
 - **DO NOT** create public issues
-- Email security concerns to: [security@safehold.dev](mailto:security@safehold.dev)
+- Email security concerns to:  [contact@muhammadfiaz.com](mailto:contact@muhammadfiaz.com)
 - Include detailed information about the vulnerability
+
+### General Contact
+
+For questions, support, or feedback:
+- **Email**: contact@muhammadfiaz.com
+- **GitHub Issues**: [Create an issue](https://github.com/muhammad-fiaz/safehold/issues)
 
 ## Recognition
 
