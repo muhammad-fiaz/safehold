@@ -1,6 +1,24 @@
+<div align="center">
+
 # SafeHold - Environment Variable Manager
 
+</div>
+
+<div align="center">
+
 [![GitHub](https://img.shields.io/badge/GitHub-muhammad--fiaz/safehold-blue)](https://github.com/muhammad-fiaz/safehold)
+[![Crates.io](https://img.shields.io/crates/v/safehold)](https://crates.io/crates/safehold)
+[![GitHub release](https://img.shields.io/github/v/release/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/releases)
+[![Docs.rs](https://docs.rs/safehold/badge.svg)](https://docs.rs/safehold)
+[![License](https://img.shields.io/github/license/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/blob/main/LICENSE)
+[![GitHub last commit](https://img.shields.io/github/last-commit/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold)
+[![GitHub issues](https://img.shields.io/github/issues/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/issues)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/pulls)
+[![Crates.io total downloads](https://img.shields.io/crates/dt/safehold)](https://crates.io/crates/safehold)
+[![Crates.io recent downloads](https://img.shields.io/crates/d/safehold)](https://crates.io/crates/safehold)
+[![Donate](https://img.shields.io/badge/Donate-❤️-green.svg)](https://pay.muhammadfiaz.com)
+
+</div>
 
 SafeHold is a secure, cross-platform environment variable manager with both CLI and GUI interfaces. It stores environment variables and secrets encrypted at rest, supporting unlocked sets (app-managed key) and locked sets (password-protected). Perfect for managing project-specific and global environment variables without exposing sensitive data.
 
