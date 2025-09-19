@@ -1,3 +1,4 @@
+//! Environment operations: add/get/list/delete/export/run/show/clean
 use crate::cli::{SetKeyValueArgs, SetKeyArgs, SetTargetArgs, ExportArgs, RunArgs};
 use crate::config::{self, env_enc_path, lock_path};
 use crate::crypto::{self, LockInfo};
@@ -8,7 +9,9 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 use walkdir::WalkDir;
+use crate::styles;
 
+/// Parse dotenv-style bytes into a sorted map.
 fn read_env_map_from_bytes(bytes: &[u8]) -> Result<BTreeMap<String, String>> {
     // Parse as dotenv lines
     let s = String::from_utf8_lossy(bytes);
@@ -22,6 +25,7 @@ fn read_env_map_from_bytes(bytes: &[u8]) -> Result<BTreeMap<String, String>> {
     Ok(map)
 }
 
+/// Serialize map to dotenv-style string.
 fn write_env_string(map: &BTreeMap<String, String>) -> String {
     let mut out = String::new();
     for (k, v) in map {
@@ -30,6 +34,7 @@ fn write_env_string(map: &BTreeMap<String, String>) -> String {
     out
 }
 
+/// Resolve a set directory from id or name; supports "global".
 fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     let cfg = config::load_config()?;
     if id_or_name == "global" { return config::global_dir(); }
@@ -40,6 +45,7 @@ fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     bail!("set not found: {}", id_or_name)
 }
 
+/// Load encryption key for dir (password-derived if locked, else app key). Uses SAFEHOLD_PASSWORD if set.
 fn load_key_for_dir(dir: &PathBuf) -> Result<[u8;32]> {
     let base = config::base_dir()?;
     let lock_path = lock_path(dir);
@@ -56,6 +62,7 @@ fn load_key_for_dir(dir: &PathBuf) -> Result<[u8;32]> {
     }
 }
 
+/// Decrypt and read env map from a set directory.
 fn read_env_map(dir: &PathBuf) -> Result<BTreeMap<String, String>> {
     let key = load_key_for_dir(dir)?;
     let enc = fs::read(env_enc_path(dir)) .unwrap_or_default();
@@ -64,6 +71,7 @@ fn read_env_map(dir: &PathBuf) -> Result<BTreeMap<String, String>> {
     read_env_map_from_bytes(&pt)
 }
 
+/// Encrypt and write env map to a set directory.
 fn write_env_map(dir: &PathBuf, map: &BTreeMap<String, String>) -> Result<()> {
     let key = load_key_for_dir(dir)?;
     let s = write_env_string(map);
@@ -72,6 +80,7 @@ fn write_env_map(dir: &PathBuf, map: &BTreeMap<String, String>) -> Result<()> {
     Ok(())
 }
 
+/// Add or replace a key/value in a set. Reads value from stdin if not provided.
 pub fn cmd_add(args: SetKeyValueArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.set)?;
     let mut map = read_env_map(&dir)?;
@@ -86,10 +95,11 @@ pub fn cmd_add(args: SetKeyValueArgs) -> Result<()> {
     };
     map.insert(args.key, value);
     write_env_map(&dir, &map)?;
-    println!("Added");
+    styles::ok("Added");
     Ok(())
 }
 
+/// Print a single value for the given key.
 pub fn cmd_get(args: SetKeyArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.set)?;
     let map = read_env_map(&dir)?;
@@ -97,6 +107,7 @@ pub fn cmd_get(args: SetKeyArgs) -> Result<()> {
     Ok(())
 }
 
+/// List all key=value pairs in a set.
 pub fn cmd_list(args: SetTargetArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.set)?;
     let map = read_env_map(&dir)?;
@@ -104,23 +115,26 @@ pub fn cmd_list(args: SetTargetArgs) -> Result<()> {
     Ok(())
 }
 
+/// Delete a key in a set (no-op if missing).
 pub fn cmd_delete(args: SetKeyArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.set)?;
     let mut map = read_env_map(&dir)?;
     if map.remove(&args.key).is_some() {
         write_env_map(&dir, &map)?;
-        println!("Deleted");
+        styles::ok("Deleted");
     } else {
-        println!("Key not found");
+        styles::warn("Key not found");
     }
     Ok(())
 }
 
+/// Export a set or global into a .env file; supports temp mode and overwrite.
 pub fn cmd_export(args: ExportArgs) -> Result<()> {
     let dir = if args.global { config::global_dir()? } else {
         let set = args.set.as_deref().ok_or_else(|| anyhow::anyhow!("--set or --global required"))?;
         resolve_set_dir(set)?
     };
+    let pb = styles::spinner("Decrypting and writing .env...");
     let map = read_env_map(&dir)?;
     let filename = args.file.unwrap_or_else(|| ".env".into());
     if std::path::Path::new(&filename).exists() && !args.force { bail!("{} exists, use --force", filename); }
@@ -130,13 +144,15 @@ pub fn cmd_export(args: ExportArgs) -> Result<()> {
         // best-effort delete on exit
         let name = filename.clone();
         ctrlc::set_handler(move || { let _ = std::fs::remove_file(&name); std::process::exit(0); }).ok();
-        println!("Temporary .env written: {} (will delete on Ctrl+C or process exit)", filename);
+        styles::info(format!("Temporary .env written: {} (will delete on Ctrl+C or process exit)", filename));
     } else {
-        println!(".env written: {}", filename);
+        styles::ok(format!(".env written: {}", filename));
     }
+    styles::finish_spinner(pb, "Done");
     Ok(())
 }
 
+/// Run a program with environment variables injected from a set and optionally from global.
 pub fn cmd_run(args: RunArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.set)?;
     let mut map = read_env_map(&dir)?;
@@ -156,19 +172,21 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
+/// Show all sets and their keys to stdout.
 pub fn cmd_show_all() -> Result<()> {
     let cfg = config::load_config()?;
-    println!("GLOBAL:");
+    styles::info("GLOBAL:");
     let gdir = config::global_dir()?;
     if let Ok(map) = read_env_map(&gdir) { for (k,v) in map { println!("  {}={}", k, v); } }
     for s in cfg.sets {
-        println!("SET {} ({})", s.id, s.name);
+        styles::info(format!("SET {} ({})", s.id, s.name));
         let dir = config::set_dir(&s.id)?;
         if let Ok(map) = read_env_map(&dir) { for (k,v) in map { println!("  {}={}", k, v); } }
     }
     Ok(())
 }
 
+/// Recursively remove plaintext .env files in current directory tree.
 pub fn cmd_clean() -> Result<()> {
     let mut removed = 0usize;
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
@@ -178,6 +196,6 @@ pub fn cmd_clean() -> Result<()> {
             removed += 1;
         }
     }
-    println!("Removed {} .env files", removed);
+    styles::ok(format!("Removed {} .env files", removed));
     Ok(())
 }

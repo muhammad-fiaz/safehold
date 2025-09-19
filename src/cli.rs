@@ -1,13 +1,31 @@
-use clap::{ArgAction, Parser, Subcommand, Args, ValueHint};
+//! CLI schema and dispatch for SafeHold.
+use clap::{ArgAction, Parser, Subcommand, Args, ValueHint, ValueEnum};
 use anyhow::Result;
 
+/// Top-level CLI options and subcommands.
 #[derive(Parser, Debug)]
 #[command(name = "safehold", version, about = "Secure credentials manager (CLI + GUI)", long_about = None, arg_required_else_help = true)]
 pub struct Cli {
+    /// Force color choices for output formatting.
+    #[arg(global=true, long, value_enum, default_value_t=ColorChoice::Auto)]
+    pub color: ColorChoice,
+    /// Style of output: fancy (spinners) or plain.
+    #[arg(global=true, long, value_enum, default_value_t=StyleChoice::Fancy)]
+    pub style: StyleChoice,
+    /// Quiet mode: suppress non-essential output.
+    #[arg(global=true, long, action=ArgAction::SetTrue)]
+    pub quiet: bool,
     #[command(subcommand)]
     pub command: Commands,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, ValueEnum)]
+pub enum ColorChoice { Auto, Always, Never }
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, ValueEnum)]
+pub enum StyleChoice { Fancy, Plain }
+
+/// All subcommands supported by SafeHold.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Create a new credential set (unlocked by default)
@@ -34,10 +52,11 @@ pub enum Commands {
     Clean,
     /// Launch GUI
     Launch { #[arg(long, action=ArgAction::SetTrue)] gui: bool },
-    /// Setup: print PATH instructions and optionally install launcher
-    Setup,
+    /// Setup: print PATH guidance and optionally add cargo bin to PATH
+    Setup { #[arg(long, action=ArgAction::SetTrue)] add_path: bool },
 }
 
+/// Args for `create` command.
 #[derive(Args, Debug)]
 pub struct CreateArgs {
     /// Set name, or "global" for the global set
@@ -50,6 +69,7 @@ pub struct CreateArgs {
     pub password: Option<String>,
 }
 
+/// Target-only arg wrapper for commands that operate on a set.
 #[derive(Args, Debug)]
 pub struct SetTargetArgs {
     /// Set ID or name
@@ -57,6 +77,7 @@ pub struct SetTargetArgs {
     pub set: String,
 }
 
+/// Args for commands that need a set and a key.
 #[derive(Args, Debug)]
 pub struct SetKeyArgs {
     /// Set ID or name
@@ -67,6 +88,7 @@ pub struct SetKeyArgs {
     pub key: String,
 }
 
+/// Args for commands that set a key to a value.
 #[derive(Args, Debug)]
 pub struct SetKeyValueArgs {
     /// Set ID or name
@@ -80,6 +102,7 @@ pub struct SetKeyValueArgs {
     pub value: Option<String>,
 }
 
+/// Args for exporting .env files.
 #[derive(Args, Debug)]
 pub struct ExportArgs {
     /// Set ID or name; omit with --global for global
@@ -99,6 +122,7 @@ pub struct ExportArgs {
     pub temp: bool,
 }
 
+/// Args for running a process with injected environment variables.
 #[derive(Args, Debug)]
 pub struct RunArgs {
     /// Set ID or name
@@ -112,9 +136,15 @@ pub struct RunArgs {
     pub command: Vec<String>,
 }
 
+/// Parse CLI from process arguments.
 pub fn build_cli() -> Cli { Cli::parse() }
 
+/// Dispatch a parsed CLI to the appropriate handler.
 pub fn dispatch(cli: Cli) -> Result<()> {
+    // Initialize styles from global flags
+    let use_color = match cli.color { ColorChoice::Auto => atty::is(atty::Stream::Stdout), ColorChoice::Always => true, ColorChoice::Never => false };
+    let mode = match cli.style { StyleChoice::Fancy => crate::styles::RenderMode::Fancy, StyleChoice::Plain => crate::styles::RenderMode::Plain };
+    crate::styles::init(crate::styles::StyleOptions { mode, use_color, quiet: cli.quiet });
     match cli.command {
         Commands::Create(args) => crate::store::cmd_create(args),
         Commands::ListSets => crate::store::cmd_list_sets(),
@@ -128,6 +158,6 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         Commands::ShowAll => crate::envops::cmd_show_all(),
         Commands::Clean => crate::envops::cmd_clean(),
         Commands::Launch { gui } => crate::store::cmd_launch(gui),
-        Commands::Setup => crate::store::cmd_setup(),
+        Commands::Setup { add_path } => crate::store::cmd_setup(add_path),
     }
 }

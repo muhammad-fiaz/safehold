@@ -1,3 +1,4 @@
+//! Configuration and filesystem layout helpers for SafeHold.
 use anyhow::{Context, Result};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
@@ -5,8 +6,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
+/// Application base directory under the user's home.
 pub const APP_DIR_NAME: &str = ".credman"; // per user request but app is safehold
 
+/// Persistent configuration stored in `config.json` under the base dir.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub sets: Vec<SetMeta>,
@@ -14,6 +17,7 @@ pub struct Config {
     pub created_at: String,
 }
 
+/// Metadata for each credential set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetMeta {
     pub id: String,    // e.g. 001_project1

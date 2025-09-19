@@ -1,12 +1,8 @@
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
-use assert_fs::prelude::*;
 use std::process::Command;
 
-fn bin() -> Command {
-    let mut cmd = Command::cargo_bin("safehold").unwrap();
-    cmd
-}
+fn bin() -> Command { Command::cargo_bin("safehold").unwrap() }
 
 #[test]
 fn create_unlocked_and_add_get() {

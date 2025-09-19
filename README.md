@@ -57,6 +57,33 @@ SafeHold is a secure, cross-platform environment variable manager with both CLI 
    safehold --help
    ```
 
+## Installation modes: CLI vs GUI
+
+SafeHold can be installed in two modes:
+
+- CLI only (default):
+   - `cargo install safehold`
+   - Installs the command-line interface only.
+- CLI + GUI:
+   - `cargo install safehold --features gui`
+   - Installs both CLI and the graphical UI.
+
+If you try to launch the GUI without installing it, the CLI will inform you how to reinstall with the GUI feature.
+
+## CLI styling options
+
+SafeHold’s CLI supports global switches to control colors and animations:
+
+- `--color <auto|always|never>`: force color usage. Default is `auto` (uses color only when attached to a TTY).
+- `--style <fancy|plain>`: choose `fancy` to enable spinner animations and styled prefixes, or `plain` for simple text. Default is `fancy`.
+- `--quiet`: suppress non-essential output.
+
+Examples:
+
+- Disable colors and animations: `safehold --color never --style plain list-sets`
+- Keep colors but disable spinners: `safehold --style plain create projectA --password secret`
+- Quiet mode for scripting: `safehold --quiet export --set projectA --file .env`
+
 ## Usage
 
 SafeHold stores data in `~/.credman/` (or equivalent on Windows/macOS). Run `safehold setup` for initial setup and PATH guidance.
@@ -86,8 +113,8 @@ SafeHold stores data in `~/.credman/` (or equivalent on Windows/macOS). Run `saf
 #### Utilities
 - Show all: `safehold show-all` (prompts for locked sets)
 - Clean stray `.env`: `safehold clean`
-- Setup: `safehold setup`
-- Launch GUI: `safehold launch --gui` (requires GUI build)
+- Setup: `safehold setup` prints PATH guidance; `safehold setup --add-path` attempts to add Cargo's bin folder to PATH automatically
+- Launch GUI: `safehold launch --gui` launches the GUI when installed with the `gui` feature; otherwise shows a hint to reinstall with GUI
 
 ### GUI Usage
 
@@ -145,16 +172,8 @@ safehold launch --gui
 
 ## Contributing
 
-Contributions welcome! Please:
-1. Fork the repo.
-2. Create a feature branch.
-3. Submit a PR with tests.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on how to get started, development setup, and contribution guidelines.
 
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-For issues or questions, visit [GitHub Issues](https://github.com/muhammad-fiaz/safehold/issues).</content>
-<parameter name="filePath">e:\Projects\safehold\README.md

@@ -1,3 +1,4 @@
+//! Cryptography utilities: app key management and password KDF + AEAD.
 use anyhow::{anyhow, bail, Result};
 use aes_gcm::{aead::{Aead, KeyInit, OsRng}, Aes256Gcm, Nonce};
 use rand::RngCore;
@@ -12,6 +13,7 @@ use zeroize::Zeroize;
 // App-managed key is stored in base dir as app.key (random 32 bytes)
 const APP_KEY_FILE: &str = "app.key";
 
+/// Info needed to derive a key from a password using Argon2id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockInfo {
     pub kdf: String, // argon2id
@@ -19,9 +21,11 @@ pub struct LockInfo {
     pub params: KdfParams,
 }
 
+/// Argon2id parameterization used for KDF.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KdfParams { pub m_cost: u32, pub t_cost: u32, pub p_cost: u32 }
 
+/// Ensure an app-managed 32-byte key exists at `app.key` under `base`.
 pub fn ensure_app_key(base: &Path) -> Result<()> {
     let key_path = base.join(APP_KEY_FILE);
     if !key_path.exists() {
@@ -33,6 +37,7 @@ pub fn ensure_app_key(base: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Load the 32-byte app key from disk.
 pub fn load_app_key(base: &Path) -> Result<[u8;32]> {
     let data = fs::read(base.join(APP_KEY_FILE)).map_err(|e| anyhow!("read app.key: {e}"))?;
     if data.len()!=32 { bail!("invalid app.key size") }
@@ -41,6 +46,7 @@ pub fn load_app_key(base: &Path) -> Result<[u8;32]> {
     Ok(key)
 }
 
+/// Encrypt plaintext with AES-256-GCM, prepending a random 12-byte nonce.
 pub fn encrypt_with_key(key: &[u8;32], plaintext: &[u8]) -> Result<Vec<u8>> {
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| anyhow!("cipher init: {e}"))?;
     let mut nonce_bytes = [0u8;12];
@@ -53,6 +59,7 @@ pub fn encrypt_with_key(key: &[u8;32], plaintext: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Decrypt data produced by `encrypt_with_key`.
 pub fn decrypt_with_key(key: &[u8;32], data: &[u8]) -> Result<Vec<u8>> {
     if data.len() < 12 { bail!("cipher too short") }
     let (nonce_bytes, ct) = data.split_at(12);
@@ -62,6 +69,7 @@ pub fn decrypt_with_key(key: &[u8;32], data: &[u8]) -> Result<Vec<u8>> {
     Ok(pt)
 }
 
+/// Derive a 32-byte key from `password` using the provided `LockInfo`.
 pub fn derive_key_from_password(password: &str, lock: &LockInfo) -> Result<[u8;32]> {
     let salt_bytes = B64.decode(&lock.salt_b64).map_err(|e| anyhow!("salt b64: {e}"))?;
     let params = argon2::Params::new(lock.params.m_cost, lock.params.t_cost, lock.params.p_cost, Some(32)).map_err(|e| anyhow!("params: {e}"))?;
@@ -71,6 +79,7 @@ pub fn derive_key_from_password(password: &str, lock: &LockInfo) -> Result<[u8;3
     Ok(out)
 }
 
+/// Create a `LockInfo` using fresh random salt and default costs; validates derivation once.
 pub fn create_lock(password: &str) -> Result<LockInfo> {
     let mut salt = [0u8;16];
     OsRng.fill_bytes(&mut salt);
