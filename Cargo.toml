@@ -41,7 +41,7 @@ walkdir = "2"
 ctrlc = "3"
 
 # GUI-only dependencies (feature gated)
-eframe = { version = "0.28", optional = true }
+eframe = { version = "0.32", optional = true }
 egui_extras = { version = "0.28", optional = true }
 
 [profile.release]
