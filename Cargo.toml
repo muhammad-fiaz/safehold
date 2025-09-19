@@ -42,7 +42,7 @@ ctrlc = "3"
 
 # GUI-only dependencies (feature gated)
 eframe = { version = "0.28", optional = true }
-egui_extras = { version = "0.28", optional = true }
+egui_extras = { version = "0.32", optional = true }
 
 [profile.release]
 codegen-units = 1
