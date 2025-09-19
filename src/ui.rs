@@ -1,13 +1,5 @@
 #[cfg(feature = "gui")]
-use anyhow::{anyhow, Context, Result};
-#[cfg(feature = "gui")]
-use eframe::{egui, App};
-#[cfg(feature = "gui")]
-use std::collections::{BTreeMap, HashMap};
-#[cfg(feature = "gui")]
-use std::path::PathBuf;
-#[cfg(feature = "gui")]
-use std::fs;
+use crate::cli::CreateArgs;
 #[cfg(feature = "gui")]
 use crate::config::{self, Config};
 #[cfg(feature = "gui")]
@@ -17,7 +9,15 @@ use crate::crypto::{self, LockInfo};
 #[cfg(feature = "gui")]
 use crate::store;
 #[cfg(feature = "gui")]
-use crate::cli::CreateArgs;
+use anyhow::{Context, Result, anyhow};
+#[cfg(feature = "gui")]
+use eframe::{App, egui};
+#[cfg(feature = "gui")]
+use std::collections::{BTreeMap, HashMap};
+#[cfg(feature = "gui")]
+use std::fs;
+#[cfg(feature = "gui")]
+use std::path::PathBuf;
 
 #[cfg(feature = "gui")]
 pub fn launch_gui() -> Result<()> {
@@ -82,11 +82,20 @@ impl SafeHoldApp {
     }
 
     fn ensure_loaded(&mut self, id_or_global: &str) -> Result<()> {
-        if self.maps_cache.contains_key(id_or_global) { return Ok(()); }
-        let dir = if id_or_global == "global" { config::global_dir()? } else { config::set_dir(id_or_global)? };
+        if self.maps_cache.contains_key(id_or_global) {
+            return Ok(());
+        }
+        let dir = if id_or_global == "global" {
+            config::global_dir()?
+        } else {
+            config::set_dir(id_or_global)?
+        };
         let pwd = self.passwords.get(id_or_global).map(|s| s.as_str());
         match read_env_map_dir(&dir, pwd) {
-            Ok(map) => { self.maps_cache.insert(id_or_global.to_string(), map); Ok(()) }
+            Ok(map) => {
+                self.maps_cache.insert(id_or_global.to_string(), map);
+                Ok(())
+            }
             Err(e) => {
                 self.message = format!("Load failed: {}", e);
                 Err(e)
@@ -95,39 +104,60 @@ impl SafeHoldApp {
     }
 
     fn is_locked(&self, id_or_global: &str) -> bool {
-        let dir = match if id_or_global == "global" { config::global_dir() } else { config::set_dir(id_or_global) } {
-            Ok(d) => d, Err(_) => return false,
+        let dir = match if id_or_global == "global" {
+            config::global_dir()
+        } else {
+            config::set_dir(id_or_global)
+        } {
+            Ok(d) => d,
+            Err(_) => return false,
         };
         lock_path(&dir).exists()
     }
 
     fn add_kv(&mut self, id_or_global: &str) {
-        if self.new_key.trim().is_empty() { self.message = "Key cannot be empty".into(); return; }
+        if self.new_key.trim().is_empty() {
+            self.message = "Key cannot be empty".into();
+            return;
+        }
         let map = self.maps_cache.entry(id_or_global.to_string()).or_default();
         map.insert(self.new_key.trim().to_string(), self.new_val.clone());
-        if let Err(e) = self.save_map(id_or_global) { self.message = format!("Save failed: {}", e); return; }
+        if let Err(e) = self.save_map(id_or_global) {
+            self.message = format!("Save failed: {}", e);
+            return;
+        }
         self.new_key.clear();
         self.new_val.clear();
         self.message = "Added".into();
     }
 
     fn save_map(&mut self, id_or_global: &str) -> Result<()> {
-        let dir = if id_or_global == "global" { config::global_dir()? } else { config::set_dir(id_or_global)? };
+        let dir = if id_or_global == "global" {
+            config::global_dir()?
+        } else {
+            config::set_dir(id_or_global)?
+        };
         let pwd = self.passwords.get(id_or_global).map(|s| s.as_str());
         if let Some(map) = self.maps_cache.get(id_or_global) {
             write_env_map_dir(&dir, map, pwd)
-        } else { Ok(()) }
+        } else {
+            Ok(())
+        }
     }
 
     fn delete_key(&mut self, id_or_global: &str, key: &str) {
         if let Some(map) = self.maps_cache.get_mut(id_or_global) {
             map.remove(key);
-            if let Err(e) = self.save_map(id_or_global) { self.message = format!("Delete failed: {}", e); }
+            if let Err(e) = self.save_map(id_or_global) {
+                self.message = format!("Delete failed: {}", e);
+            }
         }
     }
 
     fn refresh_config(&mut self) {
-        if let Ok(cfg) = config::load_config() { self.cfg = cfg; }
+        if let Ok(cfg) = config::load_config() {
+            self.cfg = cfg;
+        }
     }
 
     fn lock_unlock_global(&mut self, lock: bool) {
@@ -141,8 +171,10 @@ impl SafeHoldApp {
                 match crypto::create_lock(&self.new_project_password) {
                     Ok(li) => {
                         if let Ok(dir) = config::global_dir() {
-                            let _ = fs::write(lock_path(&dir), serde_json::to_vec_pretty(&li).unwrap());
-                            self.passwords.insert("global".into(), self.new_project_password.clone());
+                            let _ =
+                                fs::write(lock_path(&dir), serde_json::to_vec_pretty(&li).unwrap());
+                            self.passwords
+                                .insert("global".into(), self.new_project_password.clone());
                             self.message = "Global locked".into();
                             self.refresh_config();
                         }
@@ -170,19 +202,29 @@ impl SafeHoldApp {
         let mut total_creds = 0usize;
         let mut occurrences: HashMap<String, Vec<String>> = HashMap::new();
         // include global as a pseudo-project named "global"
-        let mut sets: Vec<(String, PathBuf)> = vec![("global".into(), config::global_dir().unwrap_or_else(|_| PathBuf::new()))];
+        let mut sets: Vec<(String, PathBuf)> = vec![(
+            "global".into(),
+            config::global_dir().unwrap_or_else(|_| PathBuf::new()),
+        )];
         for s in &self.cfg.sets {
-            if let Ok(dir) = config::set_dir(&s.id) { sets.push((s.id.clone(), dir)); }
+            if let Ok(dir) = config::set_dir(&s.id) {
+                sets.push((s.id.clone(), dir));
+            }
         }
         for (id, dir) in sets {
             let pwd = self.passwords.get(&id).map(|s| s.as_str());
             if let Ok(map) = read_env_map_dir(&dir, pwd) {
                 total_creds += map.len();
-                for k in map.keys() { occurrences.entry(k.clone()).or_default().push(id.clone()); }
+                for k in map.keys() {
+                    occurrences.entry(k.clone()).or_default().push(id.clone());
+                }
             }
         }
-        let mut dups: Vec<(String, Vec<String>)> = occurrences.into_iter().filter_map(|(k,v)| if v.len()>1 { Some((k,v)) } else { None }).collect();
-        dups.sort_by(|a,b| a.0.cmp(&b.0));
+        let mut dups: Vec<(String, Vec<String>)> = occurrences
+            .into_iter()
+            .filter_map(|(k, v)| if v.len() > 1 { Some((k, v)) } else { None })
+            .collect();
+        dups.sort_by(|a, b| a.0.cmp(&b.0));
         (total_projects, total_creds, dups)
     }
 }
@@ -194,68 +236,101 @@ impl App for SafeHoldApp {
             ui.horizontal(|ui| {
                 ui.heading("SafeHold Credential Manager");
                 ui.separator();
-                if ui.button("Create Project").clicked() { self.show_create = true; }
+                if ui.button("Create Project").clicked() {
+                    self.show_create = true;
+                }
                 ui.separator();
                 let is_locked = self.is_locked("global");
                 if is_locked {
-                    if ui.button("Unlock Global").clicked() { self.lock_unlock_global(false); }
+                    if ui.button("Unlock Global").clicked() {
+                        self.lock_unlock_global(false);
+                    }
                 } else {
-                    let te = egui::TextEdit::singleline(&mut self.new_project_password).hint_text("Global password");
+                    let te = egui::TextEdit::singleline(&mut self.new_project_password)
+                        .hint_text("Global password");
                     ui.add(te);
-                    if ui.button("Lock Global").clicked() { self.lock_unlock_global(true); }
+                    if ui.button("Lock Global").clicked() {
+                        self.lock_unlock_global(true);
+                    }
                 }
             });
         });
 
-        egui::SidePanel::left("side").resizable(true).show(ctx, |ui| {
-            ui.heading("Global");
-            let locked = self.is_locked("global");
-            if ui.selectable_label(self.selected.as_deref()==Some("global"), if locked {"global (locked)"} else {"global"}).clicked() {
-                self.select("global");
-            }
-            if locked {
-                ui.horizontal(|ui|{
-                    ui.label("Password:");
-                    let pw = self.passwords.entry("global".into()).or_default();
-                    ui.add(egui::TextEdit::singleline(pw).password(true));
-                    if ui.button("Unlock view").clicked() { self.maps_cache.remove("global"); let _=self.ensure_loaded("global"); }
-                });
-            }
-            ui.separator();
-            ui.heading("Projects");
-            for s in self.cfg.sets.clone() {
-                let label = if self.is_locked(&s.id) { format!("{} (locked)", s.name) } else { s.name.clone() };
-                if ui.selectable_label(self.selected.as_deref()==Some(&s.id), label).clicked() {
-                    self.select(&s.id);
+        egui::SidePanel::left("side")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Global");
+                let locked = self.is_locked("global");
+                if ui
+                    .selectable_label(
+                        self.selected.as_deref() == Some("global"),
+                        if locked { "global (locked)" } else { "global" },
+                    )
+                    .clicked()
+                {
+                    self.select("global");
                 }
-                ui.horizontal(|ui|{
-                    if self.selected.as_deref()==Some(&s.id) {
-                        if ui.small_button("Delete project").clicked() {
-                            if let Err(e) = store::cmd_delete_set(&s.id) { self.message = format!("Delete project failed: {}", e); }
-                            self.refresh_config();
-                            self.maps_cache.remove(&s.id);
-                            if self.selected.as_deref()==Some(&s.id) { self.selected=None; }
+                if locked {
+                    ui.horizontal(|ui| {
+                        ui.label("Password:");
+                        let pw = self.passwords.entry("global".into()).or_default();
+                        ui.add(egui::TextEdit::singleline(pw).password(true));
+                        if ui.button("Unlock view").clicked() {
+                            self.maps_cache.remove("global");
+                            let _ = self.ensure_loaded("global");
                         }
+                    });
+                }
+                ui.separator();
+                ui.heading("Projects");
+                for s in self.cfg.sets.clone() {
+                    let label = if self.is_locked(&s.id) {
+                        format!("{} (locked)", s.name)
+                    } else {
+                        s.name.clone()
+                    };
+                    if ui
+                        .selectable_label(self.selected.as_deref() == Some(&s.id), label)
+                        .clicked()
+                    {
+                        self.select(&s.id);
                     }
-                });
-            }
-        });
+                    ui.horizontal(|ui| {
+                        if self.selected.as_deref() == Some(&s.id) {
+                            if ui.small_button("Delete project").clicked() {
+                                if let Err(e) = store::cmd_delete_set(&s.id) {
+                                    self.message = format!("Delete project failed: {}", e);
+                                }
+                                self.refresh_config();
+                                self.maps_cache.remove(&s.id);
+                                if self.selected.as_deref() == Some(&s.id) {
+                                    self.selected = None;
+                                }
+                            }
+                        }
+                    });
+                }
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(sel) = self.selected.clone() {
                 // password prompt section if locked
                 if self.is_locked(&sel) {
-                    ui.horizontal(|ui|{
+                    ui.horizontal(|ui| {
                         ui.label("Password:");
                         let pw = self.passwords.entry(sel.clone()).or_default();
                         ui.add(egui::TextEdit::singleline(pw).password(true));
-                        if ui.button("Unlock").clicked() { self.maps_cache.remove(&sel); let _=self.ensure_loaded(&sel); }
+                        if ui.button("Unlock").clicked() {
+                            self.maps_cache.remove(&sel);
+                            let _ = self.ensure_loaded(&sel);
+                        }
                     });
                     ui.separator();
                 }
-                ui.horizontal(|ui|{
+                ui.horizontal(|ui| {
                     ui.label("Filter:");
-                    let te = egui::TextEdit::singleline(&mut self.filter).hint_text("filter by key");
+                    let te =
+                        egui::TextEdit::singleline(&mut self.filter).hint_text("filter by key");
                     ui.add(te);
                 });
                 ui.separator();
@@ -264,13 +339,17 @@ impl App for SafeHoldApp {
                     let entries: Vec<(String, String)> = map.into_iter().collect();
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         for (k, v) in entries {
-                            if !self.filter.is_empty() && !k.contains(&self.filter) { continue; }
-                            ui.horizontal(|ui|{
+                            if !self.filter.is_empty() && !k.contains(&self.filter) {
+                                continue;
+                            }
+                            ui.horizontal(|ui| {
                                 ui.label(k.clone());
                                 let mut val = v.clone();
                                 let resp = ui.add(egui::TextEdit::singleline(&mut val));
                                 if resp.changed() {
-                                    if let Some(m) = self.maps_cache.get_mut(&sel) { m.insert(k.clone(), val.clone()); }
+                                    if let Some(m) = self.maps_cache.get_mut(&sel) {
+                                        m.insert(k.clone(), val.clone());
+                                    }
                                 }
                                 if ui.small_button("Delete").clicked() {
                                     self.delete_key(&sel, &k);
@@ -279,67 +358,105 @@ impl App for SafeHoldApp {
                             ui.separator();
                         }
                     });
-                    if ui.button("Save all changes").clicked() { if let Err(e)=self.save_map(&sel){ self.message=format!("Save failed: {}", e);} }
+                    if ui.button("Save all changes").clicked() {
+                        if let Err(e) = self.save_map(&sel) {
+                            self.message = format!("Save failed: {}", e);
+                        }
+                    }
                 } else {
                     ui.label("No data or failed to load.");
                 }
                 ui.separator();
-                ui.horizontal(|ui|{
+                ui.horizontal(|ui| {
                     let te_key = egui::TextEdit::singleline(&mut self.new_key).hint_text("KEY");
                     ui.add(te_key);
                     let te_val = egui::TextEdit::singleline(&mut self.new_val).hint_text("value");
                     ui.add(te_val);
-                    if ui.button("Add").clicked() { self.add_kv(&sel); }
+                    if ui.button("Add").clicked() {
+                        self.add_kv(&sel);
+                    }
                 });
             } else {
                 ui.label("Select a project to view credentials.");
             }
-            if !self.message.is_empty() { ui.separator(); ui.label(&self.message); }
+            if !self.message.is_empty() {
+                ui.separator();
+                ui.label(&self.message);
+            }
         });
 
         // create project modal-like area
         if self.show_create {
-            egui::Window::new("Create Project").collapsible(false).resizable(false).show(ctx, |ui|{
-                ui.label("Name:");
-                ui.text_edit_singleline(&mut self.new_project_name);
-                ui.horizontal(|ui|{
-                    ui.checkbox(&mut self.new_project_lock, "Lock with password");
-                    if self.new_project_lock { let te = egui::TextEdit::singleline(&mut self.new_project_password).hint_text("password"); ui.add(te); }
-                });
-                ui.horizontal(|ui|{
-                    if ui.button("Create").clicked() {
-                        let args = CreateArgs { name: self.new_project_name.clone(), lock: self.new_project_lock, password: if self.new_project_lock { Some(self.new_project_password.clone()) } else { None } };
-                        match store::cmd_create(args) {
-                            Ok(()) => {
-                                self.message = "Project created".into();
-                                // after refresh, resolve id by name to store password mapping under id
-                                self.new_project_name.clear(); self.new_project_password.clear(); self.new_project_lock=false;
-                                self.show_create = false;
-                                self.refresh_config();
-                                if self.new_project_lock {
-                                    if let Some(s) = self.cfg.sets.iter().find(|s| s.name == self.new_project_name) {
-                                        self.passwords.insert(s.id.clone(), self.new_project_password.clone());
+            egui::Window::new("Create Project")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut self.new_project_name);
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.new_project_lock, "Lock with password");
+                        if self.new_project_lock {
+                            let te = egui::TextEdit::singleline(&mut self.new_project_password)
+                                .hint_text("password");
+                            ui.add(te);
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.button("Create").clicked() {
+                            let args = CreateArgs {
+                                name: self.new_project_name.clone(),
+                                lock: self.new_project_lock,
+                                password: if self.new_project_lock {
+                                    Some(self.new_project_password.clone())
+                                } else {
+                                    None
+                                },
+                            };
+                            match store::cmd_create(args) {
+                                Ok(()) => {
+                                    self.message = "Project created".into();
+                                    // after refresh, resolve id by name to store password mapping under id
+                                    self.new_project_name.clear();
+                                    self.new_project_password.clear();
+                                    self.new_project_lock = false;
+                                    self.show_create = false;
+                                    self.refresh_config();
+                                    if self.new_project_lock {
+                                        if let Some(s) = self
+                                            .cfg
+                                            .sets
+                                            .iter()
+                                            .find(|s| s.name == self.new_project_name)
+                                        {
+                                            self.passwords.insert(
+                                                s.id.clone(),
+                                                self.new_project_password.clone(),
+                                            );
+                                        }
                                     }
                                 }
+                                Err(e) => {
+                                    self.message = format!("Create failed: {}", e);
+                                }
                             }
-                            Err(e) => { self.message = format!("Create failed: {}", e); }
                         }
-                    }
-                    if ui.button("Cancel").clicked() { self.show_create = false; }
+                        if ui.button("Cancel").clicked() {
+                            self.show_create = false;
+                        }
+                    });
                 });
-            });
         }
 
         // stats panel bottom
-        egui::TopBottomPanel::bottom("bottom").show(ctx, |ui|{
+        egui::TopBottomPanel::bottom("bottom").show(ctx, |ui| {
             let (total_projects, total_creds, dups) = self.stats();
-            ui.horizontal(|ui|{
+            ui.horizontal(|ui| {
                 ui.label(format!("Projects: {}", total_projects));
                 ui.separator();
                 ui.label(format!("Total credentials: {}", total_creds));
             });
             if !dups.is_empty() {
-                ui.collapsing("Duplicate keys across projects", |ui|{
+                ui.collapsing("Duplicate keys across projects", |ui| {
                     for (k, sets) in dups {
                         ui.label(format!("{} -> {:?}", k, sets));
                     }
@@ -351,7 +468,7 @@ impl App for SafeHoldApp {
 
 // Helper functions for GUI to read/write maps using optional password input
 #[cfg(feature = "gui")]
-fn load_key_for_dir_gui(dir: &PathBuf, password_opt: Option<&str>) -> Result<[u8;32]> {
+fn load_key_for_dir_gui(dir: &PathBuf, password_opt: Option<&str>) -> Result<[u8; 32]> {
     let base = config::base_dir()?;
     let lp = lock_path(dir);
     if lp.exists() {
@@ -365,27 +482,40 @@ fn load_key_for_dir_gui(dir: &PathBuf, password_opt: Option<&str>) -> Result<[u8
 }
 
 #[cfg(feature = "gui")]
-fn read_env_map_dir(dir: &PathBuf, password_opt: Option<&str>) -> Result<BTreeMap<String,String>> {
+fn read_env_map_dir(dir: &PathBuf, password_opt: Option<&str>) -> Result<BTreeMap<String, String>> {
     let key = load_key_for_dir_gui(dir, password_opt)?;
     let enc = fs::read(env_enc_path(dir)).unwrap_or_default();
-    if enc.is_empty() { return Ok(BTreeMap::new()); }
+    if enc.is_empty() {
+        return Ok(BTreeMap::new());
+    }
     let pt = crypto::decrypt_with_key(&key, &enc)?;
     // Parse dotenv lines
     let s = String::from_utf8_lossy(&pt);
     let mut map = BTreeMap::new();
     for line in s.lines() {
-        if line.trim().is_empty() || line.trim_start().starts_with('#') { continue; }
-        if let Some((k, v)) = line.split_once('=') { map.insert(k.trim().into(), v.trim().into()); }
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            map.insert(k.trim().into(), v.trim().into());
+        }
     }
     Ok(map)
 }
 
 #[cfg(feature = "gui")]
-fn write_env_map_dir(dir: &PathBuf, map: &BTreeMap<String,String>, password_opt: Option<&str>) -> Result<()> {
+fn write_env_map_dir(
+    dir: &PathBuf,
+    map: &BTreeMap<String, String>,
+    password_opt: Option<&str>,
+) -> Result<()> {
     let key = load_key_for_dir_gui(dir, password_opt)?;
     let mut out = String::new();
-    for (k,v) in map { out.push_str(&format!("{}={}\n", k, v)); }
+    for (k, v) in map {
+        out.push_str(&format!("{}={}\n", k, v));
+    }
     let ct = crypto::encrypt_with_key(&key, out.as_bytes())?;
-    fs::write(env_enc_path(dir), ct).with_context(|| format!("write {}", env_enc_path(dir).display()))?;
+    fs::write(env_enc_path(dir), ct)
+        .with_context(|| format!("write {}", env_enc_path(dir).display()))?;
     Ok(())
 }

@@ -2,9 +2,9 @@
 use crate::cli::CreateArgs;
 use crate::config::{self, SetMeta};
 use crate::crypto;
-use anyhow::{bail, Context, Result};
-use std::fs;
 use crate::styles;
+use anyhow::{Context, Result, bail};
+use std::fs;
 use std::process::Command;
 
 /// Create a new project (or configure global).
@@ -15,10 +15,20 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
     let mut cfg = config::load_config()?;
 
     let name = args.name.clone();
-    let id = if name == "global" { "global".to_string() } else { config::next_set_id(&name, &cfg.sets) };
+    let id = if name == "global" {
+        "global".to_string()
+    } else {
+        config::next_set_id(&name, &cfg.sets)
+    };
 
-    let dir = if id == "global" { config::global_dir()? } else { config::set_dir(&id)? };
-    if dir.exists() { bail!("project already exists: {}", id); }
+    let dir = if id == "global" {
+        config::global_dir()?
+    } else {
+        config::set_dir(&id)?
+    };
+    if dir.exists() {
+        bail!("project already exists: {}", id);
+    }
     fs::create_dir_all(&dir)?;
 
     if args.lock {
@@ -34,7 +44,11 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
     }
 
     if id != "global" {
-        let meta = SetMeta { id: id.clone(), name: name.clone(), locked: args.lock };
+        let meta = SetMeta {
+            id: id.clone(),
+            name: name.clone(),
+            locked: args.lock,
+        };
         cfg.sets.push(meta);
         config::save_config(&cfg)?;
     } else {
@@ -42,7 +56,11 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
         config::save_config(&cfg)?;
     }
 
-    styles::ok(format!("Created project {} ({})", id, if args.lock {"locked"} else {"unlocked"}));
+    styles::ok(format!(
+        "Created project {} ({})",
+        id,
+        if args.lock { "locked" } else { "unlocked" }
+    ));
     Ok(())
 }
 
@@ -60,7 +78,11 @@ pub fn cmd_list_sets() -> Result<()> {
 /// Delete a project by id or the global space.
 pub fn cmd_delete_set(id: &str) -> Result<()> {
     let mut cfg = config::load_config()?;
-    let (is_global, dir) = if id == "global" { (true, config::global_dir()?) } else { (false, config::set_dir(id)?) };
+    let (is_global, dir) = if id == "global" {
+        (true, config::global_dir()?)
+    } else {
+        (false, config::set_dir(id)?)
+    };
     if dir.exists() {
         fs::remove_dir_all(&dir).with_context(|| format!("delete {}", dir.display()))?;
     }
@@ -76,14 +98,16 @@ pub fn cmd_delete_set(id: &str) -> Result<()> {
 
 pub fn cmd_launch(gui: bool) -> Result<()> {
     if gui {
-        #[cfg(feature="gui")]
+        #[cfg(feature = "gui")]
         {
             crate::ui::launch_gui()?;
             return Ok(());
         }
-        #[cfg(not(feature="gui"))]
+        #[cfg(not(feature = "gui"))]
         {
-            styles::warn("GUI is not installed. Reinstall with: cargo install safehold --features gui");
+            styles::warn(
+                "GUI is not installed. Reinstall with: cargo install safehold --features gui",
+            );
             styles::info("Then run: safehold launch --gui");
             return Ok(());
         }
@@ -106,7 +130,9 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
     }
     #[cfg(not(windows))]
     {
-        println!("Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc");
+        println!(
+            "Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc"
+        );
     }
     if add_path {
         // Support a dry-run env var for tests to avoid mutating user PATH.
@@ -117,12 +143,20 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
             #[cfg(windows)]
             {
                 // Update PATH persistently using setx. This appends cargo bin to PATH.
-                let cargo_bin = format!("{}\\.cargo\\bin", std::env::var("USERPROFILE").unwrap_or_else(|_| "%USERPROFILE%".into()));
+                let cargo_bin = format!(
+                    "{}\\.cargo\\bin",
+                    std::env::var("USERPROFILE").unwrap_or_else(|_| "%USERPROFILE%".into())
+                );
                 let cmdline = format!("setx PATH \"{};%PATH%\"", cargo_bin);
                 let status = Command::new("cmd").arg("/C").arg(cmdline).status();
                 match status {
-                    Ok(st) if st.success() => styles::ok("PATH updated for current user (You may need to restart terminals)."),
-                    Ok(st) => styles::warn(format!("PATH update returned status {}. You may need admin privileges.", st)),
+                    Ok(st) if st.success() => styles::ok(
+                        "PATH updated for current user (You may need to restart terminals).",
+                    ),
+                    Ok(st) => styles::warn(format!(
+                        "PATH update returned status {}. You may need admin privileges.",
+                        st
+                    )),
                     Err(e) => styles::warn(format!("Failed to update PATH automatically: {}", e)),
                 }
             }
@@ -132,7 +166,11 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
                 let home = std::env::var("HOME").unwrap_or_else(|_| "$HOME".into());
                 let bashrc = format!("{}/.bashrc", home);
                 let line = "export PATH=\"$HOME/.cargo/bin:$PATH\"\n";
-                match std::fs::OpenOptions::new().create(true).append(true).open(&bashrc) {
+                match std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&bashrc)
+                {
                     Ok(mut f) => {
                         use std::io::Write;
                         if let Err(e) = f.write_all(line.as_bytes()) {
@@ -147,6 +185,8 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
             }
         }
     }
-    styles::info("You can create desktop or Start Menu shortcuts to launch the GUI via 'safehold launch --gui' if installed with GUI feature.");
+    styles::info(
+        "You can create desktop or Start Menu shortcuts to launch the GUI via 'safehold launch --gui' if installed with GUI feature.",
+    );
     Ok(())
 }

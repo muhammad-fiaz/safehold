@@ -1,15 +1,15 @@
 //! Environment operations: add/get/list/delete/export/run/show/clean
-use crate::cli::{ProjectKeyValueArgs, ProjectKeyArgs, ProjectTargetArgs, ExportArgs, RunArgs};
+use crate::cli::{ExportArgs, ProjectKeyArgs, ProjectKeyValueArgs, ProjectTargetArgs, RunArgs};
 use crate::config::{self, env_enc_path, lock_path};
 use crate::crypto::{self, LockInfo};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 // use dotenvy; // parsing implemented manually
+use crate::styles;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use crate::styles;
 
 /// Parse dotenv-style bytes into a sorted map.
 fn read_env_map_from_bytes(bytes: &[u8]) -> Result<BTreeMap<String, String>> {
@@ -17,7 +17,9 @@ fn read_env_map_from_bytes(bytes: &[u8]) -> Result<BTreeMap<String, String>> {
     let s = String::from_utf8_lossy(bytes);
     let mut map = BTreeMap::new();
     for line in s.lines() {
-        if line.trim().is_empty() || line.trim_start().starts_with('#') { continue; }
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
+        }
         if let Some((k, v)) = line.split_once('=') {
             map.insert(k.trim().to_string(), v.trim().to_string());
         }
@@ -37,16 +39,22 @@ fn write_env_string(map: &BTreeMap<String, String>) -> String {
 /// Resolve a project directory from id or name; supports "global".
 fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     let cfg = config::load_config()?;
-    if id_or_name == "global" { return config::global_dir(); }
+    if id_or_name == "global" {
+        return config::global_dir();
+    }
     // accept name or id
-    if let Some(s) = cfg.sets.iter().find(|s| s.id == id_or_name || s.name == id_or_name) {
+    if let Some(s) = cfg
+        .sets
+        .iter()
+        .find(|s| s.id == id_or_name || s.name == id_or_name)
+    {
         return config::set_dir(&s.id);
     }
     bail!("project not found: {}", id_or_name)
 }
 
 /// Load encryption key for dir (password-derived if locked, else app key). Uses SAFEHOLD_PASSWORD if set.
-fn load_key_for_dir(dir: &PathBuf) -> Result<[u8;32]> {
+fn load_key_for_dir(dir: &PathBuf) -> Result<[u8; 32]> {
     let base = config::base_dir()?;
     let lock_path = lock_path(dir);
     if lock_path.exists() {
@@ -65,8 +73,10 @@ fn load_key_for_dir(dir: &PathBuf) -> Result<[u8;32]> {
 /// Decrypt and read env map from a project directory.
 fn read_env_map(dir: &PathBuf) -> Result<BTreeMap<String, String>> {
     let key = load_key_for_dir(dir)?;
-    let enc = fs::read(env_enc_path(dir)) .unwrap_or_default();
-    if enc.is_empty() { return Ok(BTreeMap::new()); }
+    let enc = fs::read(env_enc_path(dir)).unwrap_or_default();
+    if enc.is_empty() {
+        return Ok(BTreeMap::new());
+    }
     let pt = crypto::decrypt_with_key(&key, &enc)?;
     read_env_map_from_bytes(&pt)
 }
@@ -103,7 +113,11 @@ pub fn cmd_add(args: ProjectKeyValueArgs) -> Result<()> {
 pub fn cmd_get(args: ProjectKeyArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.project)?;
     let map = read_env_map(&dir)?;
-    if let Some(v) = map.get(&args.key) { println!("{}", v); } else { bail!("key not found"); }
+    if let Some(v) = map.get(&args.key) {
+        println!("{}", v);
+    } else {
+        bail!("key not found");
+    }
     Ok(())
 }
 
@@ -111,7 +125,9 @@ pub fn cmd_get(args: ProjectKeyArgs) -> Result<()> {
 pub fn cmd_list(args: ProjectTargetArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.project)?;
     let map = read_env_map(&dir)?;
-    for (k, v) in map { println!("{}={}", k, v); }
+    for (k, v) in map {
+        println!("{}={}", k, v);
+    }
     Ok(())
 }
 
@@ -130,21 +146,35 @@ pub fn cmd_delete(args: ProjectKeyArgs) -> Result<()> {
 
 /// Export a project or global into a .env file; supports temp mode and overwrite.
 pub fn cmd_export(args: ExportArgs) -> Result<()> {
-    let dir = if args.global { config::global_dir()? } else {
-        let project = args.project.as_deref().ok_or_else(|| anyhow::anyhow!("--project or --global required"))?;
+    let dir = if args.global {
+        config::global_dir()?
+    } else {
+        let project = args
+            .project
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("--project or --global required"))?;
         resolve_set_dir(project)?
     };
     let pb = styles::spinner("Decrypting and writing .env...");
     let map = read_env_map(&dir)?;
     let filename = args.file.unwrap_or_else(|| ".env".into());
-    if std::path::Path::new(&filename).exists() && !args.force { bail!("{} exists, use --force", filename); }
+    if std::path::Path::new(&filename).exists() && !args.force {
+        bail!("{} exists, use --force", filename);
+    }
     let content = write_env_string(&map);
     fs::write(&filename, content)?;
     if args.temp {
         // best-effort delete on exit
         let name = filename.clone();
-        ctrlc::set_handler(move || { let _ = std::fs::remove_file(&name); std::process::exit(0); }).ok();
-        styles::info(format!("Temporary .env written: {} (will delete on Ctrl+C or process exit)", filename));
+        ctrlc::set_handler(move || {
+            let _ = std::fs::remove_file(&name);
+            std::process::exit(0);
+        })
+        .ok();
+        styles::info(format!(
+            "Temporary .env written: {} (will delete on Ctrl+C or process exit)",
+            filename
+        ));
     } else {
         styles::ok(format!(".env written: {}", filename));
     }
@@ -168,7 +198,9 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     cmd.args(iter);
     cmd.envs(map);
     let status = cmd.status()?;
-    if !status.success() { bail!("process exited with status {:?}", status.code()); }
+    if !status.success() {
+        bail!("process exited with status {:?}", status.code());
+    }
     Ok(())
 }
 
@@ -177,11 +209,19 @@ pub fn cmd_show_all() -> Result<()> {
     let cfg = config::load_config()?;
     styles::info("GLOBAL:");
     let gdir = config::global_dir()?;
-    if let Ok(map) = read_env_map(&gdir) { for (k,v) in map { println!("  {}={}", k, v); } }
+    if let Ok(map) = read_env_map(&gdir) {
+        for (k, v) in map {
+            println!("  {}={}", k, v);
+        }
+    }
     for s in cfg.sets {
         styles::info(format!("PROJECT {} ({})", s.id, s.name));
         let dir = config::set_dir(&s.id)?;
-        if let Ok(map) = read_env_map(&dir) { for (k,v) in map { println!("  {}={}", k, v); } }
+        if let Ok(map) = read_env_map(&dir) {
+            for (k, v) in map {
+                println!("  {}={}", k, v);
+            }
+        }
     }
     Ok(())
 }

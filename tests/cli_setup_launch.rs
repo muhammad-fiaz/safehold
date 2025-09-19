@@ -2,7 +2,9 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 
-fn bin() -> Command { Command::cargo_bin("safehold").unwrap() }
+fn bin() -> Command {
+    Command::cargo_bin("safehold").unwrap()
+}
 
 #[test]
 fn setup_add_path_dry_run_and_launch_without_gui() {
@@ -14,7 +16,9 @@ fn setup_add_path_dry_run_and_launch_without_gui() {
     cmd.env("SAFEHOLD_HOME", &home)
         .env("SAFEHOLD_PATH_DRY_RUN", "1")
         .args(["setup", "--add-path"]);
-    cmd.assert().success().stdout(predicate::str::contains("PATH update (dry run) would be applied"));
+    cmd.assert().success().stdout(predicate::str::contains(
+        "PATH update (dry run) would be applied",
+    ));
 
     // launch --gui should print a helpful hint when GUI feature is not compiled
     let mut cmd = bin();

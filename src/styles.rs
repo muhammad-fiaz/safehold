@@ -27,35 +27,65 @@ pub struct StyleOptions {
 static STYLE_OPTS: OnceCell<StyleOptions> = OnceCell::new();
 
 /// Initialize style options once.
-pub fn init(opts: StyleOptions) { let _ = STYLE_OPTS.set(opts); }
+pub fn init(opts: StyleOptions) {
+    let _ = STYLE_OPTS.set(opts);
+}
 
 fn opts() -> StyleOptions {
-    *STYLE_OPTS.get().unwrap_or(&StyleOptions { mode: RenderMode::Fancy, use_color: true, quiet: false })
+    *STYLE_OPTS.get().unwrap_or(&StyleOptions {
+        mode: RenderMode::Fancy,
+        use_color: true,
+        quiet: false,
+    })
 }
 
 pub fn ok<S: AsRef<str>>(msg: S) {
-    if opts().quiet { return; }
+    if opts().quiet {
+        return;
+    }
     let m = msg.as_ref();
-    if opts().use_color { println!("{} {}", "✔".green().bold(), m.green()); } else { println!("[OK] {}", m); }
+    if opts().use_color {
+        println!("{} {}", "✔".green().bold(), m.green());
+    } else {
+        println!("[OK] {}", m);
+    }
 }
 
 pub fn info<S: AsRef<str>>(msg: S) {
-    if opts().quiet { return; }
+    if opts().quiet {
+        return;
+    }
     let m = msg.as_ref();
-    if opts().use_color { println!("{} {}", "ℹ".blue().bold(), m); } else { println!("[INFO] {}", m); }
+    if opts().use_color {
+        println!("{} {}", "ℹ".blue().bold(), m);
+    } else {
+        println!("[INFO] {}", m);
+    }
 }
 
 pub fn warn<S: AsRef<str>>(msg: S) {
-    if opts().quiet { return; }
+    if opts().quiet {
+        return;
+    }
     let m = msg.as_ref();
-    if opts().use_color { eprintln!("{} {}", "⚠".yellow().bold(), m.yellow()); } else { eprintln!("[WARN] {}", m); }
+    if opts().use_color {
+        eprintln!("{} {}", "⚠".yellow().bold(), m.yellow());
+    } else {
+        eprintln!("[WARN] {}", m);
+    }
 }
 
 #[allow(dead_code)]
 pub fn err<S: AsRef<str>>(msg: S) {
-    if opts().quiet { return; }
+    if opts().quiet {
+        return;
+    }
     let m = msg.as_ref();
-    if opts().use_color { eprintln!("{} {}", "✘".red().bold(), m.red()); } else { eprintln!("[ERR] {}", m); }
+    if opts().use_color {
+        eprintln!("{} {}", "✘".red().bold(), m.red());
+    } else {
+        eprintln!("[ERR] {}", m);
+    }
 }
 
 /// Create a spinner if Fancy mode; otherwise returns a no-op spinner.
@@ -79,5 +109,9 @@ pub fn spinner<S: AsRef<str>>(msg: S) -> ProgressBar {
 
 /// Convenience to finish spinner with success.
 pub fn finish_spinner(pb: ProgressBar, msg: &str) {
-    if pb.is_hidden() { info(msg); } else { pb.finish_with_message(msg.to_string()); }
+    if pb.is_hidden() {
+        info(msg);
+    } else {
+        pb.finish_with_message(msg.to_string());
+    }
 }

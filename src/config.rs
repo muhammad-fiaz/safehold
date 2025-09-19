@@ -20,14 +20,20 @@ pub struct Config {
 /// Metadata for each credential project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetMeta {
-    pub id: String,    // e.g. 001_project1
-    pub name: String,  // display name
-    pub locked: bool,  // requires password
+    pub id: String,   // e.g. 001_project1
+    pub name: String, // display name
+    pub locked: bool, // requires password
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { sets: vec![], global_locked: false, created_at: OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default() }
+        Self {
+            sets: vec![],
+            global_locked: false,
+            created_at: OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+        }
     }
 }
 
@@ -71,18 +77,30 @@ pub fn save_config(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
-pub fn set_dir(id: &str) -> Result<PathBuf> { Ok(base_dir()?.join("credentials").join(id)) }
-pub fn global_dir() -> Result<PathBuf> { Ok(base_dir()?.join("global")) }
+pub fn set_dir(id: &str) -> Result<PathBuf> {
+    Ok(base_dir()?.join("credentials").join(id))
+}
+pub fn global_dir() -> Result<PathBuf> {
+    Ok(base_dir()?.join("global"))
+}
 
 pub fn next_set_id(name: &str, existing: &[SetMeta]) -> String {
     let mut maxn = 0u32;
     for s in existing {
         if let Some((n, _)) = s.id.split_once('_') {
-            if let Ok(v) = n.parse::<u32>() { if v > maxn { maxn = v; } }
+            if let Ok(v) = n.parse::<u32>() {
+                if v > maxn {
+                    maxn = v;
+                }
+            }
         }
     }
     format!("{:03}_{}", maxn + 1, name)
 }
 
-pub fn lock_path(dir: &Path) -> PathBuf { dir.join("lock.json") }
-pub fn env_enc_path(dir: &Path) -> PathBuf { dir.join(".env.enc") }
+pub fn lock_path(dir: &Path) -> PathBuf {
+    dir.join("lock.json")
+}
+pub fn env_enc_path(dir: &Path) -> PathBuf {
+    dir.join(".env.enc")
+}
