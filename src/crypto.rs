@@ -1,13 +1,13 @@
 //! Cryptography utilities: app key management and password KDF + AEAD.
 use aes_gcm::{
     Aes256Gcm, Nonce,
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow, bail};
 use argon2::Argon2;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use rand::RngCore;
+use rand::{RngCore, rng};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -37,7 +37,7 @@ pub fn ensure_app_key(base: &Path) -> Result<()> {
     let key_path = base.join(APP_KEY_FILE);
     if !key_path.exists() {
         let mut key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key);
+        rng().fill_bytes(&mut key);
         fs::write(&key_path, &key)?;
         key.zeroize();
     }
@@ -59,7 +59,7 @@ pub fn load_app_key(base: &Path) -> Result<[u8; 32]> {
 pub fn encrypt_with_key(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| anyhow!("cipher init: {e}"))?;
     let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
+    rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
     let mut out = Vec::with_capacity(12 + plaintext.len() + 16);
     out.extend_from_slice(&nonce_bytes);
@@ -113,7 +113,7 @@ pub fn derive_key_from_password(password: &str, lock: &LockInfo) -> Result<[u8; 
 /// Create a `LockInfo` using fresh random salt and default costs; validates derivation once.
 pub fn create_lock(password: &str) -> Result<LockInfo> {
     let mut salt = [0u8; 16];
-    OsRng.fill_bytes(&mut salt);
+    rng().fill_bytes(&mut salt);
     let params = KdfParams {
         m_cost: 19456,
         t_cost: 2,
