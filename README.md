@@ -14,7 +14,6 @@
 [![GitHub last commit](https://img.shields.io/github/last-commit/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold)
 [![GitHub issues](https://img.shields.io/github/issues/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/issues)
 [![GitHub pull requests](https://img.shields.io/github/issues-pr/muhammad-fiaz/safehold)](https://github.com/muhammad-fiaz/safehold/pulls)
-[![Crates.io total downloads](https://img.shields.io/crates/dt/safehold)](https://crates.io/crates/safehold)
 [![Crates.io recent downloads](https://img.shields.io/crates/d/safehold)](https://crates.io/crates/safehold)
 [![CodeQL](https://github.com/muhammad-fiaz/safehold/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/muhammad-fiaz/safehold/actions/workflows/github-code-scanning/codeql)
 [![Dependabot Updates](https://github.com/muhammad-fiaz/safehold/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/muhammad-fiaz/safehold/actions/workflows/dependabot/dependabot-updates)
