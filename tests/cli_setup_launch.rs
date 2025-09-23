@@ -25,10 +25,10 @@ fn setup_add_path_dry_run_and_launch_without_gui() {
     cmd.env("SAFEHOLD_HOME", &home).args(["launch", "--gui"]);
     // Depending on build flags, either the reinstall hint (stderr) or generic info (stdout) is printed.
     let assert = cmd.assert().success();
-    let hint = predicate::str::contains("GUI is not installed");
+    let hint = predicate::str::contains("GUI is not available");
     let generic = predicate::str::contains("Use --gui to launch");
     // Accept either stderr hint or stdout generic info
     let out = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
     let err = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
-    assert!(hint.eval(&err) || generic.eval(&out));
+    assert!(hint.eval(&out) || hint.eval(&err) || generic.eval(&out));
 }

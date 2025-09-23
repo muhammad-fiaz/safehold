@@ -4,17 +4,27 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint};
 
 /// Top-level CLI options and subcommands.
 #[derive(Parser, Debug)]
-#[command(name = "safehold", version, about = "Secure credentials manager (CLI + GUI)", long_about = None, arg_required_else_help = true)]
+#[command(
+    name = "safehold", 
+    version, 
+    about = "🔐 SafeHold - Secure Cross-Platform Credential Manager", 
+    long_about = "🔐 SafeHold - Professional-grade credential manager with military-grade encryption, secure storage, and both CLI and GUI interfaces.", 
+    arg_required_else_help = true,
+    help_template = "{before-help}{name} {version}\n{about}\n\n{usage-heading} {usage}\n\n{all-args}{after-help}"
+)]
 pub struct Cli {
     /// Force color choices for output formatting.
-    #[arg(global=true, long, value_enum, default_value_t=ColorChoice::Auto)]
+    #[arg(global=true, long, value_enum, default_value_t=ColorChoice::Auto, help = "🎨 Control colored output")]
     pub color: ColorChoice,
     /// Style of output: fancy (spinners) or plain.
-    #[arg(global=true, long, value_enum, default_value_t=StyleChoice::Fancy)]
+    #[arg(global=true, long, value_enum, default_value_t=StyleChoice::Fancy, help = "✨ Output style: fancy (spinners) or plain")]
     pub style: StyleChoice,
     /// Quiet mode: suppress non-essential output.
-    #[arg(global=true, long, action=ArgAction::SetTrue)]
+    #[arg(global=true, long, action=ArgAction::SetTrue, help = "🤫 Suppress non-essential output")]
     pub quiet: bool,
+    /// Install with GUI support (for installation)
+    #[arg(long, global = true, hide = true)]
+    pub gui: bool,
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -35,36 +45,90 @@ pub enum StyleChoice {
 /// All subcommands supported by SafeHold.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Create a new credential project (unlocked by default)
+    /// 📁 Create a new credential project (unlocked by default)
+    #[command(visible_alias = "new")]
     Create(CreateArgs),
-    /// List credential projects
+    /// 📋 List all credential projects
+    #[command(visible_aliases = &["ls", "projects"])]
     ListProjects,
-    /// Delete a credential project by ID or name
+    /// 🗑️ Delete a credential project by ID or name
+    #[command(visible_aliases = &["rm", "remove"])]
     DeleteProject { id: String },
-    /// Add a key/value into a project
+    /// ➕ Add a key/value credential into a project
+    #[command(visible_alias = "set")]
     Add(ProjectKeyValueArgs),
-    /// Get a value from a project
+    /// 🔍 Get a credential value from a project
+    #[command(visible_alias = "show")]
     Get(ProjectKeyArgs),
-    /// List all keys in a project
+    /// 📝 List all credentials in a project
+    #[command(visible_alias = "keys")]
     List(ProjectTargetArgs),
-    /// Delete a key in a project
+    /// ❌ Delete a credential from a project
+    #[command(visible_aliases = &["del", "rm-key"])]
     Delete(ProjectKeyArgs),
-    /// Export credentials to .env
+    /// ✏️ Update/modify a credential value in a project
+    #[command(visible_aliases = &["modify", "change", "edit"])]
+    Update(ProjectKeyValueArgs),
+    /// 📊 Count credentials in projects
+    #[command(visible_alias = "total")]
+    Count(CountArgs),
+    /// ➕ Add a key/value credential to global storage
+    #[command(name = "global-add", visible_aliases = &["gadd", "global-set"])]
+    GlobalAdd(GlobalKeyValueArgs),
+    /// 🔍 Get a credential value from global storage
+    #[command(name = "global-get", visible_aliases = &["gget", "global-show"])]
+    GlobalGet(GlobalKeyArgs),
+    /// 📝 List all credentials in global storage
+    #[command(name = "global-list", visible_aliases = &["glist", "global-keys"])]
+    GlobalList,
+    /// ❌ Delete a credential from global storage
+    #[command(name = "global-delete", visible_aliases = &["gdel", "global-rm"])]
+    GlobalDelete(GlobalKeyArgs),
+    /// ✏️ Update/modify a credential value in global storage
+    #[command(name = "global-update", visible_aliases = &["gupdate", "global-modify"])]
+    GlobalUpdate(GlobalKeyValueArgs),
+    /// 📤 Export credentials to .env format
     Export(ExportArgs),
-    /// Run a command with env vars injected (no file written)
+    /// 🚀 Run a command with credentials as environment variables (no file written)
+    #[command(visible_alias = "exec")]
     Run(RunArgs),
-    /// Show all projects and their keys (will prompt for locked)
+    /// 🔍 Show all projects and their credentials (will prompt for locked)
+    #[command(name = "show-all", visible_alias = "all")]
     ShowAll,
-    /// Clean stray plaintext .env files in current tree
+    /// 🧹 Clean up stray plaintext .env files in current directory tree
     Clean,
-    /// Launch GUI
+    /// �️ Clean cache and temporary files
+    #[command(name = "clean-cache", visible_aliases = &["clear-cache", "cache-clean"])]
+    CleanCache {
+        #[arg(long, action=ArgAction::SetTrue, help = "🚨 Skip confirmation prompt")]
+        force: bool,
+    },
+    /// 💥 Delete ALL projects and data (DESTRUCTIVE!)
+    #[command(name = "delete-all", visible_aliases = &["clear-all", "nuke"])]
+    DeleteAll {
+        #[arg(long, action=ArgAction::SetTrue, help = "🚨 Skip confirmation prompt (DANGEROUS!)")]
+        force: bool,
+    },
+    /// ℹ️ Show application information and details
+    #[command(visible_alias = "info")]
+    About,
+    /// 🔐 Manage Global Master Lock - unified password for ALL projects
+    #[command(name = "master-lock", visible_aliases = &["mlock", "global-master"])]
+    MasterLock {
+        #[arg(long, action=ArgAction::SetTrue, help = "🔒 Enable Global Master Lock")]
+        enable: bool,
+        #[arg(long, action=ArgAction::SetTrue, help = "🔓 Disable Global Master Lock")]
+        disable: bool,
+    },
+    /// �🖥️ Launch SafeHold GUI (if available)
+    #[command(visible_alias = "gui")]
     Launch {
-        #[arg(long, action=ArgAction::SetTrue)]
+        #[arg(long, action=ArgAction::SetTrue, help = "🚀 Force launch GUI mode")]
         gui: bool,
     },
-    /// Setup: print PATH guidance and optionally add cargo bin to PATH
+    /// ⚙️ Setup SafeHold environment and PATH configuration
     Setup {
-        #[arg(long, action=ArgAction::SetTrue)]
+        #[arg(long, action=ArgAction::SetTrue, help = "🛤️ Automatically add SafeHold to system PATH")]
         add_path: bool,
     },
 }
@@ -73,12 +137,13 @@ pub enum Commands {
 #[derive(Args, Debug)]
 pub struct CreateArgs {
     /// Project name, or "global" for the global project
+    #[arg(help = "📛 Project name (use 'global' for the default global project)")]
     pub name: String,
     /// Create as locked with password prompt
-    #[arg(long, short='l', action=ArgAction::SetTrue)]
+    #[arg(long, short='l', action=ArgAction::SetTrue, help = "🔒 Create project with password protection")]
     pub lock: bool,
     /// Provide password non-interactively (unsafe on shared shells)
-    #[arg(long, value_hint=ValueHint::Other)]
+    #[arg(long, value_hint=ValueHint::Other, help = "🔑 Set password non-interactively (⚠️ unsafe on shared shells)")]
     pub password: Option<String>,
 }
 
@@ -86,7 +151,7 @@ pub struct CreateArgs {
 #[derive(Args, Debug)]
 pub struct ProjectTargetArgs {
     /// Project ID or name
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "📁 Project ID or name")]
     pub project: String,
 }
 
@@ -94,10 +159,10 @@ pub struct ProjectTargetArgs {
 #[derive(Args, Debug)]
 pub struct ProjectKeyArgs {
     /// Project ID or name
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "📁 Project ID or name")]
     pub project: String,
     /// Key name
-    #[arg(long, short = 'k')]
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
     pub key: String,
 }
 
@@ -105,13 +170,13 @@ pub struct ProjectKeyArgs {
 #[derive(Args, Debug)]
 pub struct ProjectKeyValueArgs {
     /// Project ID or name
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "📁 Project ID or name")]
     pub project: String,
     /// Key name
-    #[arg(long, short = 'k')]
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
     pub key: String,
     /// Value (omit to read from stdin)
-    #[arg(long, short = 'v')]
+    #[arg(long, short = 'v', help = "💎 Credential value (omit to read from stdin securely)")]
     pub value: Option<String>,
 }
 
@@ -119,19 +184,19 @@ pub struct ProjectKeyValueArgs {
 #[derive(Args, Debug)]
 pub struct ExportArgs {
     /// Project ID or name; omit with --global for global
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "📁 Project ID or name (omit with --global for global project)")]
     pub project: Option<String>,
     /// Export global creds
-    #[arg(long, action=ArgAction::SetTrue)]
+    #[arg(long, action=ArgAction::SetTrue, help = "🌍 Export from global project")]
     pub global: bool,
     /// Custom filename
-    #[arg(long)]
+    #[arg(long, help = "📄 Custom output filename")]
     pub file: Option<String>,
     /// Overwrite existing file
-    #[arg(long, action=ArgAction::SetTrue)]
+    #[arg(long, action=ArgAction::SetTrue, help = "🔄 Overwrite existing file if present")]
     pub force: bool,
     /// Create temp file and delete on exit
-    #[arg(long, action=ArgAction::SetTrue)]
+    #[arg(long, action=ArgAction::SetTrue, help = "⏱️ Create temporary file that gets deleted on exit")]
     pub temp: bool,
 }
 
@@ -139,14 +204,59 @@ pub struct ExportArgs {
 #[derive(Args, Debug)]
 pub struct RunArgs {
     /// Project ID or name
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "📁 Project ID or name")]
     pub project: String,
     /// Merge in global
-    #[arg(long, action=ArgAction::SetTrue)]
+    #[arg(long, action=ArgAction::SetTrue, help = "🌍 Merge in credentials from global project")]
     pub with_global: bool,
     /// Command to run after '--'
-    #[arg(last = true, required = true)]
+    #[arg(last = true, required = true, help = "🚀 Command to execute (place after '--')")]
     pub command: Vec<String>,
+}
+
+/// Args for count command.
+/// 
+/// Provides flexible credential counting with options for:
+/// - Counting specific projects or all projects
+/// - Including/excluding global credentials
+/// - Detailed breakdown per project
+#[derive(Args, Debug)]
+pub struct CountArgs {
+    /// Project ID or name (omit to count all projects)
+    #[arg(long, short = 'p', help = "📁 Project ID or name (omit to count all projects)")]
+    pub project: Option<String>,
+    /// Include global in total count
+    #[arg(long, action=ArgAction::SetTrue, help = "🌍 Include global credentials in count")]
+    pub include_global: bool,
+    /// Show detailed breakdown per project
+    #[arg(long, action=ArgAction::SetTrue, help = "📊 Show detailed count breakdown")]
+    pub detailed: bool,
+}
+
+/// Args for global key operations.
+/// 
+/// Used for operations that only need a key name for global credential storage,
+/// such as getting or deleting global credentials.
+#[derive(Args, Debug)]
+pub struct GlobalKeyArgs {
+    /// Key name
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
+    pub key: String,
+}
+
+/// Args for global key-value operations.
+/// 
+/// Used for operations that need both a key and value for global credential storage,
+/// such as adding or updating global credentials. The value can be provided via
+/// command line or prompted from stdin if omitted.
+#[derive(Args, Debug)]
+pub struct GlobalKeyValueArgs {
+    /// Key name
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
+    pub key: String,
+    /// Value (omit to read from stdin)
+    #[arg(long, short = 'v', help = "💎 Credential value (omit to read from stdin securely)")]
+    pub value: Option<String>,
 }
 
 /// Parse CLI from process arguments.
@@ -179,10 +289,30 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         Commands::Get(args) => crate::envops::cmd_get(args),
         Commands::List(args) => crate::envops::cmd_list(args),
         Commands::Delete(args) => crate::envops::cmd_delete(args),
+        Commands::Update(args) => crate::envops::cmd_update(args),
+        Commands::Count(args) => crate::envops::cmd_count(args),
+        Commands::GlobalAdd(args) => crate::envops::cmd_global_add(args),
+        Commands::GlobalGet(args) => crate::envops::cmd_global_get(args),
+        Commands::GlobalList => crate::envops::cmd_global_list(),
+        Commands::GlobalDelete(args) => crate::envops::cmd_global_delete(args),
+        Commands::GlobalUpdate(args) => crate::envops::cmd_global_update(args),
         Commands::Export(args) => crate::envops::cmd_export(args),
         Commands::Run(args) => crate::envops::cmd_run(args),
         Commands::ShowAll => crate::envops::cmd_show_all(),
         Commands::Clean => crate::envops::cmd_clean(),
+        Commands::CleanCache { force } => crate::envops::cmd_clean_cache(force),
+        Commands::DeleteAll { force } => crate::envops::cmd_delete_all(force),
+        Commands::About => crate::envops::cmd_about(),
+        Commands::MasterLock { enable, disable } => {
+            let action = if enable {
+                Some(true)
+            } else if disable {
+                Some(false)
+            } else {
+                None
+            };
+            crate::master_lock::cmd_master_lock(action)
+        },
         Commands::Launch { gui } => crate::store::cmd_launch(gui),
         Commands::Setup { add_path } => crate::store::cmd_setup(add_path),
     }

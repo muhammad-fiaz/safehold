@@ -1,13 +1,15 @@
 [package]
 name = "safehold"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2024"
 description = "A secure cross-platform environment variable manager with CLI and optional GUI for encrypted storage of secrets and config."
 repository = "https://github.com/muhammad-fiaz/safehold"
+homepage = "https://github.com/muhammad-fiaz/safehold"
 keywords = ["env-manager", "credential-manager", "password-manager", "encryption", "cli"]
 categories = ["command-line-utilities", "cryptography", "gui"]
 license = "MIT"
 readme = "README.md"
+authors = ["Muhammad Fiaz <contact@muhammadfiaz.com>"]
 
 [features]
 default = ["cli"]
@@ -53,3 +55,4 @@ opt-level = "s"
 assert_cmd = "2"
 predicates = "3"
 assert_fs = "1"
+tempfile = "3"

@@ -4,7 +4,8 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow, bail};
-use argon2::Argon2;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::password_hash::{SaltString};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use rand::{RngCore, rng};
@@ -110,6 +111,30 @@ pub fn derive_key_from_password(password: &str, lock: &LockInfo) -> Result<[u8; 
     Ok(out)
 }
 
+/// Derive a 32-byte key from `password` using a custom salt (for master lock).
+pub fn derive_key_from_password_and_salt(password: &str, salt: &[u8]) -> Result<[u8; 32]> {
+    // Use consistent parameters for master lock derivation
+    let params = argon2::Params::new(
+        19456, // m_cost
+        2,     // t_cost
+        1,     // p_cost
+        Some(32),
+    )
+    .map_err(|e| anyhow!("params: {e}"))?;
+    let argon = Argon2::new_with_secret(
+        &[],
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        params,
+    )
+    .map_err(|e| anyhow!("argon: {e}"))?;
+    let mut out = [0u8; 32];
+    argon
+        .hash_password_into(password.as_bytes(), salt, &mut out)
+        .map_err(|e| anyhow!("derive: {e}"))?;
+    Ok(out)
+}
+
 /// Create a `LockInfo` using fresh random salt and default costs; validates derivation once.
 pub fn create_lock(password: &str) -> Result<LockInfo> {
     let mut salt = [0u8; 16];
@@ -138,4 +163,28 @@ pub fn create_lock(password: &str) -> Result<LockInfo> {
         salt_b64: B64.encode(salt),
         params,
     })
+}
+
+/// Create an Argon2 hash from a password for storage/verification
+pub fn argon2_hash(password: &[u8]) -> Result<String> {
+    // Generate a random salt using the same RNG system as other parts
+    let mut salt_bytes = [0u8; 16];
+    rng().fill_bytes(&mut salt_bytes);
+    let salt = SaltString::encode_b64(&salt_bytes)
+        .map_err(|e| anyhow!("encode salt: {e}"))?;
+    
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(password, &salt)
+        .map_err(|e| anyhow!("hash password: {e}"))?
+        .to_string();
+    Ok(password_hash)
+}
+
+/// Verify a password against an Argon2 hash
+pub fn argon2_verify(password: &[u8], hash: &str) -> Result<bool> {
+    let parsed_hash = PasswordHash::new(hash)
+        .map_err(|e| anyhow!("parse hash: {e}"))?;
+    let argon2 = Argon2::default();
+    Ok(argon2.verify_password(password, &parsed_hash).is_ok())
 }

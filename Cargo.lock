@@ -3217,7 +3217,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "safehold"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3242,6 +3242,7 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.16",
  "time",
  "walkdir",
