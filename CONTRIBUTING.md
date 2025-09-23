@@ -208,6 +208,111 @@ SafeHold includes several key areas for contribution:
    ```
 7. **Create a Pull Request** on GitHub
 
+## Docker Development
+
+SafeHold supports Docker for development and deployment. This section covers working with Docker during development.
+
+### Docker Setup for Development
+
+The project includes Docker configuration for containerized development and testing:
+
+```bash
+# Build the Docker image locally
+docker build -t safehold:dev .
+
+# Run SafeHold in a container
+docker run --rm -it safehold:dev --help
+
+# Use docker-compose for development (recommended)
+docker-compose up --build
+```
+
+### Container Development Workflow
+
+1. **Local development with Docker**:
+   ```bash
+   # Build and test in container
+   docker build -t safehold:test .
+   docker run --rm safehold:test cargo test
+   
+   # Interactive development container
+   docker run --rm -it -v "$(pwd):/workspace" -w /workspace rust:1.75 bash
+   ```
+
+2. **Testing with containers**:
+   ```bash
+   # Run full test suite in container
+   docker run --rm -v "$(pwd):/workspace" -w /workspace rust:1.75 cargo test
+   
+   # Test specific features
+   docker run --rm -v "$(pwd):/workspace" -w /workspace rust:1.75 cargo test --features gui
+   ```
+
+3. **Cross-platform testing**:
+   ```bash
+   # Test on different architectures using Docker buildx
+   docker buildx build --platform linux/amd64,linux/arm64 -t safehold:multi .
+   ```
+
+### Docker Configuration Files
+
+- **Dockerfile**: Multi-stage build for optimized production images
+  - Builder stage: Rust compilation with full toolchain
+  - Runtime stage: Minimal Debian image with only necessary dependencies
+  - Security: Non-root user execution
+
+- **docker-compose.yml**: Development orchestration
+  - Persistent data volumes for SafeHold data
+  - Environment variable configuration
+  - Health checks and restart policies
+
+- **.dockerignore**: Excludes unnecessary files from build context
+  - Target directory and build artifacts
+  - Git metadata and documentation
+  - Test files and temporary data
+
+### Container Testing Guidelines
+
+When developing with Docker:
+
+1. **Test isolation**: Containers provide clean environments for testing
+2. **Volume mapping**: Use volumes for persistent data during development
+3. **Environment variables**: Test different configurations using environment variables
+4. **Multi-stage builds**: Verify both build and runtime stages work correctly
+
+### Container Security Considerations
+
+- **Non-root execution**: Container runs as non-root user `safehold`
+- **Minimal runtime**: Production image based on `debian:12-slim`
+- **No secrets in images**: Never include credentials or sensitive data in Docker images
+- **Health checks**: Container includes health check endpoint
+
+### Docker Best Practices for Contributors
+
+1. **Keep images small**: Use multi-stage builds and minimal base images
+2. **Cache optimization**: Order Dockerfile commands for optimal layer caching
+3. **Security scanning**: Regularly scan images for vulnerabilities
+4. **Documentation**: Update Docker documentation when modifying container behavior
+
+### Troubleshooting Docker Issues
+
+Common Docker development issues:
+
+```bash
+# Clear Docker build cache
+docker builder prune
+
+# Remove all containers and rebuild
+docker-compose down --volumes
+docker-compose up --build
+
+# Check container logs
+docker-compose logs
+
+# Debug container issues
+docker run --rm -it --entrypoint /bin/bash safehold:dev
+```
+
 ### Feature Development Guidelines
 
 #### Adding New Commands

@@ -144,6 +144,68 @@ SafeHold can be installed in two modes:
 
 If you try to launch the GUI without installing it, the CLI will inform you how to reinstall with the GUI feature.
 
+## Docker Installation
+
+SafeHold can be run in a Docker container for isolated environments or server deployments.
+
+### Prerequisites
+- Docker and Docker Compose installed
+
+### Quick Start with Docker Compose
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/muhammad-fiaz/safehold.git
+   cd safehold
+   ```
+
+2. **Start the container:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Use SafeHold commands:**
+   ```bash
+   # Check version
+   docker-compose exec safehold safehold version
+   
+   # Create a project
+   docker-compose exec safehold safehold create myproject
+   
+   # Set environment variables
+   docker-compose exec safehold safehold set --project myproject MY_VAR "my_value"
+   
+   # List variables
+   docker-compose exec safehold safehold list --project myproject
+   
+   # Interactive shell
+   docker-compose exec safehold bash
+   ```
+
+4. **View logs:**
+   ```bash
+   docker-compose logs safehold
+   ```
+
+5. **Stop the container:**
+   ```bash
+   docker-compose down
+   ```
+
+### Docker Features
+
+- **Persistent Data**: Environment variables stored in named Docker volume
+- **Security**: Runs as non-root user inside container
+- **Health Checks**: Built-in container health monitoring
+- **Minimal Footprint**: Multi-stage build for optimized image size
+
+### Docker Environment Variables
+
+- `SAFEHOLD_DATA_DIR`: Data storage directory (default: `/app/data`)
+- `RUST_LOG`: Logging level (default: `info`)
+
+For detailed Docker usage, see [DOCKER.md](DOCKER.md).
+
 ## Updating SafeHold
 
 SafeHold automatically checks for updates and includes built-in update management.
