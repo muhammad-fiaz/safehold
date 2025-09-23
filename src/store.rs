@@ -56,10 +56,15 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
         config::save_config(&cfg)?;
     }
 
-    styles::ok(format!(
-        "Created project {} ({})",
-        id,
-        if args.lock { "locked" } else { "unlocked" }
+    styles::success(format!(
+        "Created project '{}' ({}) with ID: {}",
+        args.name,
+        if args.lock {
+            "🔒 locked"
+        } else {
+            "🔓 unlocked"
+        },
+        id
     ));
     Ok(())
 }
@@ -67,11 +72,36 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
 /// List all projects (and global).
 pub fn cmd_list_sets() -> Result<()> {
     let cfg = config::load_config()?;
-    styles::info("ID\tNAME\tLOCKED");
-    for s in cfg.sets {
-        println!("{}\t{}\t{}", s.id, s.name, s.locked);
+
+    styles::header("SafeHold Projects");
+    styles::divider();
+
+    if cfg.sets.is_empty() && !cfg.global_locked {
+        styles::info("No projects found. Create one with: safehold create <name>");
+        return Ok(());
     }
-    println!("GLOBAL\tglobal\t{}", cfg.global_locked);
+
+    // Show global project
+    let lock_status = if cfg.global_locked {
+        "🔒 Locked"
+    } else {
+        "🔓 Unlocked"
+    };
+    styles::kv("GLOBAL", format!("global - {}", lock_status));
+
+    // Show all custom projects
+    let project_count = cfg.sets.len();
+    for s in cfg.sets {
+        let lock_status = if s.locked {
+            "🔒 Locked"
+        } else {
+            "🔓 Unlocked"
+        };
+        styles::kv(&s.id, format!("{} - {}", s.name, lock_status));
+    }
+
+    println!();
+    styles::info(format!("Total: {} project(s) + global", project_count));
     Ok(())
 }
 
@@ -92,7 +122,7 @@ pub fn cmd_delete_set(id: &str) -> Result<()> {
         cfg.global_locked = false;
     }
     config::save_config(&cfg)?;
-    styles::ok(format!("Deleted project {id}"));
+    styles::success(format!("🗑️ Deleted project '{id}' and all its credentials"));
     Ok(())
 }
 
@@ -100,44 +130,83 @@ pub fn cmd_launch(gui: bool) -> Result<()> {
     if gui {
         #[cfg(feature = "gui")]
         {
+            // Display ASCII art banner for GUI launch
+            println!();
+            println!("┌─────────────────────────────────────────────────────────────────┐");
+            println!("│  ███████╗ █████╗ ███████╗███████╗██╗  ██╗ ██████╗ ██╗     ██████╗ │");
+            println!("│  ██╔════╝██╔══██╗██╔════╝██╔════╝██║  ██║██╔═══██╗██║     ██╔══██╗│");
+            println!("│  ███████╗███████║█████╗  █████╗  ███████║██║   ██║██║     ██║  ██║│");
+            println!("│  ╚════██║██╔══██║██╔══╝  ██╔══╝  ██╔══██║██║   ██║██║     ██║  ██║│");
+            println!("│  ███████║██║  ██║██║     ███████╗██║  ██║╚██████╔╝███████╗██████╔╝│");
+            println!("│  ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═════╝ │");
+            println!("│                                                                     │");
+            println!("│              🔐 Professional Environment Variable Manager 🔐       │");
+            println!(
+                "│                     Version {} - GUI Mode 🖥️                   │",
+                env!("CARGO_PKG_VERSION")
+            );
+            println!("└─────────────────────────────────────────────────────────────────┘");
+            println!();
+
+            styles::info("🚀 Launching SafeHold GUI...");
             crate::ui::launch_gui()?;
             return Ok(());
         }
         #[cfg(not(feature = "gui"))]
         {
-            styles::warn(
-                "GUI is not installed. Reinstall with: cargo install safehold --features gui",
+            styles::error("GUI is not available in this installation");
+            styles::info(
+                "💡 To get GUI support, reinstall with: cargo install safehold --features gui",
             );
             styles::info("Then run: safehold launch --gui");
             return Ok(());
         }
     }
-    styles::info("Use --gui to launch graphical interface.");
+
+    styles::header("SafeHold Launch Options");
+    if crate::install::gui_available() {
+        styles::bullet("🖥️ Launch GUI: safehold launch --gui");
+    } else {
+        styles::bullet("📝 CLI-only mode: use safehold commands");
+        styles::bullet("💡 Add GUI: cargo install safehold --features gui");
+    }
+    styles::bullet("📚 Help: safehold --help");
+    styles::bullet("⚙️ Setup: safehold setup --add-path");
     Ok(())
 }
 
 /// Print PATH guidance and ensure base layout is initialized.
 pub fn cmd_setup(add_path: bool) -> Result<()> {
-    // We print PATH guidance; installation scripts differ per OS, keep instructions simple.
-    let pb = styles::spinner("Initializing...");
+    // Display ASCII art banner
+    println!();
+    println!("┌─────────────────────────────────────────────────────────────────┐");
+    println!("│  ███████╗ █████╗ ███████╗███████╗██╗  ██╗ ██████╗ ██╗     ██████╗ │");
+    println!("│  ██╔════╝██╔══██╗██╔════╝██╔════╝██║  ██║██╔═══██╗██║     ██╔══██╗│");
+    println!("│  ███████╗███████║█████╗  █████╗  ███████║██║   ██║██║     ██║  ██║│");
+    println!("│  ╚════██║██╔══██║██╔══╝  ██╔══╝  ██╔══██║██║   ██║██║     ██║  ██║│");
+    println!("│  ███████║██║  ██║██║     ███████╗██║  ██║╚██████╔╝███████╗██████╔╝│");
+    println!("│  ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═════╝ │");
+    println!("│                                                                     │");
+    println!("│              🔐 Professional Environment Variable Manager 🔐       │");
+    println!(
+        "│                        Version {} - Setup                       │",
+        env!("CARGO_PKG_VERSION")
+    );
+    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!();
+
+    let pb = styles::spinner("🚀 Initializing SafeHold environment...");
     let base = config::ensure_layout()?;
     crypto::ensure_app_key(&base)?;
-    styles::finish_spinner(pb, "Initialized");
-    styles::info("Add the cargo bin directory to your PATH to access 'safehold':");
-    #[cfg(windows)]
-    {
-        println!("Windows: setx PATH \"%USERPROFILE%\\.cargo\\bin;%PATH%\"");
-    }
-    #[cfg(not(windows))]
-    {
-        println!(
-            "Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc"
-        );
-    }
+    styles::finish_spinner_success(pb, "SafeHold environment initialized");
+
+    println!();
+    styles::header("PATH Configuration");
+
     if add_path {
         // Support a dry-run env var for tests to avoid mutating user PATH.
         if std::env::var("SAFEHOLD_PATH_DRY_RUN").ok().as_deref() == Some("1") {
-            styles::ok("PATH update (dry run) would be applied.");
+            styles::success("PATH update (dry run) would be applied.");
             styles::info("To actually update PATH, run without SAFEHOLD_PATH_DRY_RUN.");
         } else {
             #[cfg(windows)]
@@ -150,14 +219,17 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
                 let cmdline = format!("setx PATH \"{};%PATH%\"", cargo_bin);
                 let status = Command::new("cmd").arg("/C").arg(cmdline).status();
                 match status {
-                    Ok(st) if st.success() => styles::ok(
-                        "PATH updated for current user (You may need to restart terminals).",
-                    ),
+                    Ok(st) if st.success() => {
+                        styles::success("PATH updated for current user");
+                        styles::info(
+                            "⚠️ You may need to restart your terminal for changes to take effect",
+                        );
+                    }
                     Ok(st) => styles::warn(format!(
                         "PATH update returned status {}. You may need admin privileges.",
                         st
                     )),
-                    Err(e) => styles::warn(format!("Failed to update PATH automatically: {}", e)),
+                    Err(e) => styles::error(format!("Failed to update PATH automatically: {}", e)),
                 }
             }
             #[cfg(not(windows))]
@@ -174,19 +246,38 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
                     Ok(mut f) => {
                         use std::io::Write;
                         if let Err(e) = f.write_all(line.as_bytes()) {
-                            styles::warn(format!("Failed to append to {}: {}", bashrc, e));
+                            styles::error(format!("Failed to append to {}: {}", bashrc, e));
                         } else {
-                            styles::ok(format!("Added cargo bin to PATH in {}.", bashrc));
-                            styles::info("Restart your shell or 'source ~/.bashrc'.");
+                            styles::success(format!("Added cargo bin to PATH in {}.", bashrc));
+                            styles::info("🔄 Restart your shell or run: source ~/.bashrc");
                         }
                     }
-                    Err(e) => styles::warn(format!("Failed to open {}: {}", bashrc, e)),
+                    Err(e) => styles::error(format!("Failed to open {}: {}", bashrc, e)),
                 }
             }
         }
+    } else {
+        styles::info("💡 Manual PATH setup:");
+        #[cfg(windows)]
+        {
+            styles::bullet("Windows: setx PATH \"%USERPROFILE%\\.cargo\\bin;%PATH%\"");
+        }
+        #[cfg(not(windows))]
+        {
+            styles::bullet(
+                "Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc",
+            );
+        }
+        styles::info("Or run: safehold setup --add-path");
     }
-    styles::info(
-        "You can create desktop or Start Menu shortcuts to launch the GUI via 'safehold launch --gui' if installed with GUI feature.",
-    );
+
+    println!();
+    if crate::install::gui_available() {
+        styles::info("🖥️ GUI available! Create shortcuts to launch with: safehold launch --gui");
+    } else {
+        styles::info(
+            "📝 CLI-only installation. Reinstall with GUI: cargo install safehold --features gui",
+        );
+    }
     Ok(())
 }

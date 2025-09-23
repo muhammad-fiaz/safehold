@@ -67,15 +67,32 @@ cargo build --release --features gui
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (includes unit and integration tests)
 cargo test
 
-# Run specific test
+# Run only integration tests (comprehensive CLI functionality tests)
+cargo test --test integration_tests
+
+# Run specific test module
 cargo test test_name
 
 # Run with verbose output
 cargo test -- --nocapture
+
+# Run tests for GUI features
+cargo test --features gui
 ```
+
+### Test Structure
+
+- **Unit tests**: Located in `src/` modules, test individual functions
+- **Integration tests**: Located in `tests/` directory:
+  - `tests/integration_tests.rs`: Comprehensive CLI functionality tests
+  - `tests/cli_basic.rs`: Basic CLI operation tests  
+  - `tests/cli_export_run.rs`: Export and run functionality tests
+  - `tests/cli_setup_launch.rs`: Setup and launch functionality tests
+
+**Note**: Integration tests use isolated test environments with `SAFEHOLD_HOME` environment variable to prevent interference with your actual SafeHold data.
 
 ### Development Commands
 
@@ -98,10 +115,32 @@ cargo doc --open
 ### Types of Contributions
 
 - **Bug fixes**: Fix existing issues
-- **Features**: Add new functionality
-- **Documentation**: Improve docs, README, examples
-- **Tests**: Add or improve test coverage
+- **Features**: Add new functionality (e.g., CLI commands, GUI features)
+- **Documentation**: Improve docs, README, examples, docstrings
+- **Tests**: Add or improve test coverage (unit tests, integration tests)
 - **Code quality**: Refactoring, performance improvements
+- **Cross-platform**: Improve Windows, macOS, and Linux compatibility
+
+### Feature Areas
+
+SafeHold includes several key areas for contribution:
+
+- **CLI Commands**: Adding new commands or improving existing ones
+  - Project management (`create`, `list-projects`, `delete-project`)
+  - Credential management (`add`, `get`, `update`, `delete`, `list`)
+  - Global credentials (`global-add`, `global-get`, `global-update`, `global-delete`, `global-list`)
+  - Statistics and counting (`count` with various options)
+  - Export and execution (`export`, `run`, `show-all`)
+  - Utilities (`setup`, `clean`, `launch`)
+
+- **GUI Interface**: Enhancing the graphical interface
+  - Main project view and credential management
+  - Global credentials tab
+  - Settings display (version, author information)
+  - Dialog implementations for update/delete operations
+
+- **Security & Encryption**: Improving secure storage
+- **Cross-platform Support**: Ensuring functionality across all platforms
 
 ### Finding Issues
 
@@ -132,6 +171,47 @@ cargo doc --open
    ```
 7. **Create a Pull Request** on GitHub
 
+### Feature Development Guidelines
+
+#### Adding New Commands
+
+When adding new CLI commands to SafeHold:
+
+1. **Add to CLI structure** in `src/cli.rs`:
+   - Add new command variant to `Commands` enum
+   - Include descriptive help text and aliases
+   - Add appropriate command line arguments
+
+2. **Implement command logic** in `src/envops.rs`:
+   - Create new function following naming convention `cmd_<command_name>`
+   - Add comprehensive docstring documentation
+   - Include error handling and user feedback
+
+3. **Update dispatch logic** in `src/cli.rs`:
+   - Add routing to your new function in the `dispatch` function
+
+4. **Add GUI support** if applicable in `src/ui.rs`:
+   - Add UI elements and dialogs for the new functionality
+   - Ensure consistency with existing GUI patterns
+
+#### Destructive Operations Guidelines
+
+⚠️ **CRITICAL**: When adding destructive operations:
+
+1. **Always include confirmation prompts** unless `--force` flag is used
+2. **Provide clear warnings** about what will be deleted/lost
+3. **Use specific confirmation text** (like "DELETE ALL MY DATA") for dangerous operations
+4. **Add comprehensive safety documentation** in help text and README
+5. **Test thoroughly** in isolated environments only
+6. **Add both force and interactive modes** for automation and safety
+
+#### Command Naming Conventions
+
+- Use clear, descriptive names (e.g., `clean-cache` not `clean`)
+- Provide intuitive aliases (e.g., `clear-cache`, `cache-clean`)
+- Follow existing patterns for consistency
+- Use dashes for multi-word commands (`delete-all` not `deleteall`)
+
 ### Commit Message Guidelines
 
 We follow conventional commit format:
@@ -155,12 +235,15 @@ Examples:
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (includes unit and integration tests)
 cargo test
 
-# Run integration tests only
+# Run comprehensive integration tests
+cargo test --test integration_tests
+
+# Run specific integration test modules
 cargo test --test cli_basic
-cargo test --test cli_export_run
+cargo test --test cli_export_run  
 cargo test --test cli_setup_launch
 
 # Run with environment overrides for testing
@@ -172,14 +255,70 @@ SAFEHOLD_PATH_DRY_RUN=1 cargo test
 
 ### Test Coverage
 
+SafeHold has comprehensive test coverage across multiple areas:
+
 - **Unit tests**: Test individual functions and modules
-- **Integration tests**: Test CLI commands and workflows
-  - Basic CLI operations (create, add, get, list, delete)
-  - Export and run functionality
-  - Setup with `--add-path` (use `SAFEHOLD_PATH_DRY_RUN=1` for safe testing)
-  - Launch `--gui` without GUI feature (should show reinstall hint)
+- **Integration tests**: Test complete CLI workflows with isolated environments
+  - `integration_tests.rs`: Comprehensive tests covering:
+    - Version information and help system
+    - Complete project lifecycle (create, list, delete)
+    - Full credential management (add, get, update, delete, list)
+    - Global credentials functionality
+    - Count and statistics features
+    - Export functionality
+    - **Maintenance operations**: Cache cleaning and about command
+    - **Destructive operations**: Delete-all command with safety testing
+    - **Force flag functionality**: Testing bypass mechanisms
+    - **Command aliases**: Testing all command aliases and shortcuts
+    - Error handling and edge cases
+    - Cross-platform compatibility
+  - `cli_basic.rs`: Basic CLI operations (create, add, get, list, delete)
+  - `cli_export_run.rs`: Export and run functionality
+  - `cli_setup_launch.rs`: Setup with `--add-path` and GUI launch testing
 - **GUI tests**: Manual testing of GUI features (automated GUI testing is complex)
-- **Cross-platform**: Test on Windows, macOS, and Linux
+- **Cross-platform**: All tests designed to work on Windows, macOS, and Linux
+
+### Adding New Tests
+
+When contributing new features:
+
+1. **Add unit tests** for new functions in the same file using `#[cfg(test)]`
+2. **Add integration tests** to `tests/integration_tests.rs` for new CLI commands
+3. **Update existing tests** if modifying existing functionality
+4. **Test cross-platform** compatibility on different operating systems
+5. **Test destructive operations safely** using isolated test environments
+
+### Testing Destructive Commands
+
+⚠️ **IMPORTANT**: When testing destructive operations like `delete-all`:
+
+- **ALWAYS use isolated test environments** with `SAFEHOLD_HOME` set to temporary directories
+- **NEVER run destructive tests** on your actual SafeHold data
+- **Use `--force` flags** in tests to bypass confirmations
+- **Verify cleanup** after destructive operations
+- **Test both confirmation and bypass mechanisms**
+
+Example of safe destructive testing:
+```rust
+#[test]
+fn test_delete_all_command_safety() -> Result<()> {
+    let env = TestEnv::new()?; // Creates isolated environment
+    
+    // Create test data
+    env.run_success(&["create", "test-project"])?;
+    env.run_success(&["add", "--project", "test-project", "--key", "TEST", "--value", "data"])?;
+    
+    // Test destructive operation with force flag (safe in isolated env)
+    let output = env.run_success(&["delete-all", "--force"])?;
+    assert!(output.contains("permanently deleted"));
+    
+    Ok(())
+}
+```
+
+### Test Environment Isolation
+
+Integration tests use `SAFEHOLD_HOME` environment variable to create isolated test environments that don't interfere with your actual SafeHold data.
 
 ### Testing Different Build Modes
 
@@ -220,26 +359,63 @@ cargo test
 
 - **Error handling**: Use `anyhow` for application errors, `thiserror` for library errors
 - **Security**: Zeroize sensitive data after use
-- **Documentation**: Document public APIs with `///` comments
+- **Documentation**: Document public APIs and functions with comprehensive docstrings using `///` comments
+  - Include parameter descriptions
+  - Document return values and error conditions
+  - Provide examples where helpful
 - **Feature flags**: Use feature flags appropriately (CLI vs GUI). The GUI must compile and run only when the `gui` feature is enabled; otherwise `safehold launch --gui` should print a helpful reinstall hint.
 - **Cross-platform**: Ensure code works on Windows, macOS, and Linux
 - **PATH updates**: `safehold setup --add-path` attempts to add Cargo's bin directory to PATH. For tests and local development safety, respect `SAFEHOLD_PATH_DRY_RUN=1` to avoid mutating your environment.
 - **Terminology**: Use "projects" instead of "sets" in user-facing text, help messages, and documentation for better clarity
 - **CLI flags**: Use `--project` (short: `-p`) for consistency with the GUI
 - **Data safety**: Never delete or modify user data during updates. Data is stored separately in `~/.safehold/` and should be preserved across installations.
+- **CLI output formatting**: Ensure proper spacing between emojis and text in success/error messages
 
 ### Code Organization
 
 ```
 src/
-├── main.rs          # Entry point
-├── cli.rs           # CLI argument parsing and dispatch (uses --project flags)
-├── config.rs        # Configuration and file paths
-├── crypto.rs        # Encryption/decryption logic
-├── store.rs         # Project management operations
-├── envops.rs        # Environment variable operations (handles project CRUD)
-├── ui.rs            # GUI implementation (optional, uses "Projects" terminology)
+├── main.rs          # Entry point and application setup
+├── cli.rs           # CLI argument parsing and command dispatch
+│                   # - Contains all command definitions and argument structures
+│                   # - Includes comprehensive help text and command aliases
+│                   # - Dispatches to appropriate functions in envops.rs
+├── config.rs        # Configuration management and file paths
+│                   # - Handles SAFEHOLD_HOME environment variable
+│                   # - Manages app configuration and directory structure
+├── crypto.rs        # Encryption/decryption logic with AES-256-GCM
+├── store.rs         # Low-level storage operations for projects and credentials
+├── envops.rs        # High-level environment variable operations
+│                   # - All CLI command implementations (cmd_* functions)
+│                   # - Project CRUD operations
+│                   # - Global credential management
+│                   # - Count and statistics functionality
+│                   # - Comprehensive docstrings for all functions
+├── app_settings.rs  # Application settings management
+│                   # - Persistent GUI and CLI preferences storage
+│                   # - Security settings configuration
+│                   # - Session and interface preferences
+├── master_lock.rs   # Global Master Lock functionality
+│                   # - Unified password protection for ALL projects
+│                   # - Master password validation and management
+│                   # - Global security state management
+├── styles.rs        # Output formatting and styling
+│                   # - Terminal colors and spinner animations
+│                   # - Success, error, and warning message formatting
+│                   # - Progress indicators and visual feedback
+├── ui.rs            # GUI implementation (feature-gated with 'gui')
+│                   # - Main application window and tabs
+│                   # - Global credentials tab
+│                   # - Settings display with version/author info
+│                   # - Project and credential management dialogs
+├── install.rs       # Installation and setup functionality
 └── lib.rs           # Library interface (if needed)
+
+tests/
+├── integration_tests.rs # Comprehensive integration test suite
+├── cli_basic.rs         # Basic CLI functionality tests
+├── cli_export_run.rs    # Export and run command tests
+└── cli_setup_launch.rs  # Setup and launch command tests
 ```
 
 ## Submitting Changes

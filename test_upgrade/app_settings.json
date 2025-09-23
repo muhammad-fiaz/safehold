@@ -1,0 +1,23 @@
+{
+  "gui": {
+    "show_passwords_default": false,
+    "auto_save_interval": 30,
+    "window_width": 1200.0,
+    "window_height": 800.0,
+    "remember_window_position": false,
+    "default_tab": "Projects"
+  },
+  "cli": {
+    "default_color": "auto",
+    "default_style": "fancy",
+    "verbose_help": false,
+    "confirm_destructive": true
+  },
+  "security": {
+    "global_master_lock": false,
+    "session_timeout_minutes": 0,
+    "clipboard_clear_seconds": 30,
+    "require_confirmation": true
+  },
+  "settings_version": "0.0.1"
+}
