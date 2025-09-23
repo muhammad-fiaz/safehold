@@ -38,12 +38,37 @@ SafeHold is a secure, cross-platform environment variable manager with both CLI 
 - **GUI Interface**: Cross-platform graphical interface with Global tab, master lock controls, and persistent settings.
 - **Export & Run**: Decrypt to `.env` files or inject into processes.
 - **Clean Up**: Find and remove stray plaintext `.env` files.
+- **Modal Error Handling**: GUI displays errors and warnings as modal dialogs requiring user acknowledgment.
+- **Comprehensive Error Handling**: Robust error propagation with graceful handling of corrupted data and missing files.
+- **Confirmation Prompts**: All destructive operations require explicit confirmation with `--force` bypass options.
 - **Cross-Platform**: Works on Windows, macOS, and Linux with comprehensive testing.
 
 ## Installation
 
 ### Prerequisites
 - Rust 1.70+ (install via [rustup](https://rustup.rs/))
+
+### Install from Crates.io (Recommended)
+
+**CLI only:**
+```bash
+cargo install safehold
+```
+
+**CLI + GUI:**
+```bash
+cargo install safehold --features gui
+```
+
+### Install from GitHub Releases
+
+Download pre-built binaries for your platform from the [Releases page](https://github.com/muhammad-fiaz/safehold/releases):
+
+- **Windows**: `safehold-windows-x64.exe.zip` or `safehold-windows-x64-gnu.exe.zip`
+- **macOS**: `safehold-macos-x64.tar.gz` (Intel) or `safehold-macos-arm64.tar.gz` (Apple Silicon)
+- **Linux**: `safehold-linux-x64.tar.gz`, `safehold-linux-arm64.tar.gz`, or `safehold-linux-x64-musl.tar.gz`
+
+Each release includes both CLI-only and GUI-enabled binaries.
 
 ### Build from Source
 
@@ -73,6 +98,25 @@ SafeHold is a secure, cross-platform environment variable manager with both CLI 
    cargo install --path . --features gui
    ```
 
+### Cross-Platform Building
+
+SafeHold includes scripts for building across multiple platforms:
+
+**Unix/Linux/macOS:**
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+**Windows:**
+```cmd
+build.bat
+```
+
+This will create binaries for Windows, macOS, and Linux in the `dist/` directory.
+
+### Setup and PATH Configuration
+
 6. Add to PATH:
    - **Windows**: `setx PATH "%USERPROFILE%\.cargo\bin;%PATH%"`
    - **Linux/macOS**: Add `export PATH="$HOME/.cargo/bin:$PATH"` to your shell profile (e.g., `~/.bashrc`).
@@ -80,6 +124,11 @@ SafeHold is a secure, cross-platform environment variable manager with both CLI 
 7. Verify installation:
    ```bash
    safehold --help
+   ```
+
+8. Run initial setup:
+   ```bash
+   safehold setup --add-path
    ```
 
 ## Installation modes: CLI vs GUI
@@ -95,18 +144,95 @@ SafeHold can be installed in two modes:
 
 If you try to launch the GUI without installing it, the CLI will inform you how to reinstall with the GUI feature.
 
+## Docker Installation
+
+SafeHold can be run in a Docker container for isolated environments or server deployments.
+
+### Prerequisites
+- Docker and Docker Compose installed
+
+### Quick Start with Docker Compose
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/muhammad-fiaz/safehold.git
+   cd safehold
+   ```
+
+2. **Start the container:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Use SafeHold commands:**
+   ```bash
+   # Check version
+   docker-compose exec safehold safehold version
+   
+   # Create a project
+   docker-compose exec safehold safehold create myproject
+   
+   # Set environment variables
+   docker-compose exec safehold safehold set --project myproject MY_VAR "my_value"
+   
+   # List variables
+   docker-compose exec safehold safehold list --project myproject
+   
+   # Interactive shell
+   docker-compose exec safehold bash
+   ```
+
+4. **View logs:**
+   ```bash
+   docker-compose logs safehold
+   ```
+
+5. **Stop the container:**
+   ```bash
+   docker-compose down
+   ```
+
+### Docker Features
+
+- **Persistent Data**: Environment variables stored in named Docker volume
+- **Security**: Runs as non-root user inside container
+- **Health Checks**: Built-in container health monitoring
+- **Minimal Footprint**: Multi-stage build for optimized image size
+
+### Docker Environment Variables
+
+- `SAFEHOLD_DATA_DIR`: Data storage directory (default: `/app/data`)
+- `RUST_LOG`: Logging level (default: `info`)
+
+For detailed Docker usage, see [DOCKER.md](DOCKER.md).
+
 ## Updating SafeHold
+
+SafeHold automatically checks for updates and includes built-in update management.
+
+### Check for Updates
+
+**CLI:**
+```bash
+safehold check-update
+```
+
+**GUI:** Update notifications appear automatically when a new version is available, with options to visit the release page.
+
+### Update Process
 
 SafeHold stores all your projects and credentials in a separate data directory (`~/.safehold/` on Linux/macOS, or equivalent on Windows). Updating SafeHold will **never delete or remove your existing data**.
 
 To update to the latest version:
 
-1. Update from crates.io:
+1. **From crates.io:**
    ```bash
    cargo install safehold --features gui  # or without --features for CLI-only
    ```
 
-2. Or update from source:
+2. **From GitHub releases:** Download the latest binary from the [releases page](https://github.com/muhammad-fiaz/safehold/releases)
+
+3. **From source:**
    ```bash
    git pull
    cargo build --release --features gui
@@ -141,14 +267,14 @@ SafeHold stores data in `~/.safehold/` (or equivalent on Windows/macOS). Run `sa
 - Create unlocked project: `safehold create <name>` (aliases: `new`)
 - Create locked project: `safehold create <name> --lock` (prompts for password) or `safehold create <name> --password <pwd>`
 - List projects: `safehold list-projects` (aliases: `ls`, `projects`)
-- Delete project: `safehold delete-project <id|name>` (aliases: `rm`, `remove`)
+- Delete project: `safehold delete-project <id|name> [--force]` (aliases: `rm`, `remove`)
 
 #### Credential Management
 - Add key: `safehold add --project <id|name> --key <key> --value <value>` (aliases: `set`)
 - Get value: `safehold get --project <id|name> --key <key>` (aliases: `show`)
 - Update key: `safehold update --project <id|name> --key <key> --value <value>` (aliases: `modify`, `change`, `edit`)
 - List keys: `safehold list --project <id|name>` (aliases: `keys`)
-- Delete key: `safehold delete --project <id|name> --key <key>` (aliases: `del`, `rm-key`)
+- Delete key: `safehold delete --project <id|name> --key <key> [--force]` (aliases: `del`, `rm-key`)
 - Count credentials: `safehold count [--project <id|name>] [--detailed] [--include-global]` (aliases: `total`)
 
 #### Global Credentials
@@ -156,19 +282,21 @@ SafeHold stores data in `~/.safehold/` (or equivalent on Windows/macOS). Run `sa
 - Get global credential: `safehold global-get --key <key>` (aliases: `gget`, `global-show`)
 - Update global credential: `safehold global-update --key <key> --value <value>` (aliases: `gupdate`, `global-modify`)
 - List global credentials: `safehold global-list` (aliases: `glist`, `global-keys`)
-- Delete global credential: `safehold global-delete --key <key>` (aliases: `gdel`, `global-rm`)
+- Delete global credential: `safehold global-delete --key <key> [--force]` (aliases: `gdel`, `global-rm`)
 
 #### Export & Run
 - Export to `.env`: `safehold export --project <id|name> [--file <name>] [--force] [--temp]`
-- Run with env vars: `safehold run --project <id|name> [--with-global] -- <command>`
+- Export global: `safehold export --global [--file <name>] [--force] [--temp]`
+- Run with env vars: `safehold run --project <id|name> [--with-global] -- <command>` (aliases: `exec`)
 
 #### Utilities
-- Show all: `safehold show-all` (prompts for locked sets)
+- Show all: `safehold show-all` (prompts for locked sets) (aliases: `all`)
 - Clean stray `.env`: `safehold clean`
 - Clean cache: `safehold clean-cache [--force]` (aliases: `clear-cache`, `cache-clean`)
 - Application info: `safehold about` (aliases: `info`)
-- Setup: `safehold setup` prints PATH guidance; `safehold setup --add-path` attempts to add Cargo's bin folder to PATH automatically
+- Setup: `safehold setup [--add-path]` prints PATH guidance; `--add-path` attempts to add Cargo's bin folder to PATH automatically
 - Launch GUI: `safehold launch --gui` launches the GUI when installed with the `gui` feature; otherwise shows a hint to reinstall with GUI
+- Check for updates: `safehold check-update` (aliases: `update-check`, `check-updates`) checks for new releases from crates.io
 
 #### 🔐 Security Features
 - **Global Master Lock**: `safehold master-lock [--enable|--disable]` (aliases: `mlock`, `global-master`)
@@ -197,6 +325,8 @@ safehold launch --gui
 - **Global Tab**: Manage global credentials independent of projects.
 - **Settings**: Display version and author information.
 - **Actions**: Create projects, add/edit/delete keys, export `.env`, update/modify credentials.
+- **Error Handling**: Errors and warnings displayed as modal dialogs requiring user acknowledgment.
+- **Confirmations**: All destructive operations show confirmation dialogs with option to force.
 
 ## Examples
 
@@ -267,16 +397,16 @@ safehold launch --gui
    safehold delete-all --force  # Bypasses confirmation - USE WITH EXTREME CAUTION!
    ```
 
-4. **Global credentials**:
+9. **Force operations for automation**:
    ```bash
-   safehold create global
-   safehold add --project global --key ORG_TOKEN --value sharedtoken
-   safehold export --global --file .env --force
-   ```
-
-5. **Clean up**:
-   ```bash
-   safehold clean  # Removes plaintext .env files in current directory tree
+   # Delete project without confirmation (for scripts)
+   safehold delete-project myproject --force
+   
+   # Delete credential without confirmation
+   safehold delete --project myproject --key API_KEY --force
+   
+   # Delete global credential without confirmation
+   safehold global-delete --key SHARED_KEY --force
    ```
 
 ## Application Settings
@@ -309,53 +439,13 @@ Settings are stored in `app_settings.json` in your SafeHold data directory and a
 - **In Memory**: Sensitive data zeroized after use.
 - **Best Practices**: Use locked sets for sensitive data; avoid `--password` in shared shells.
 
-## 🆕 What's New in v0.0.1
-
-SafeHold v0.0.1 brings major enhancements and comprehensive functionality:
-
-### ✨ New Features
-- **Full CRUD Operations**: Complete Create, Read, Update, Delete functionality for both projects and credentials
-- **Global Credentials**: Manage credentials outside of projects with dedicated global commands
-- **Count & Statistics**: New `count` command with detailed project statistics
-- **Maintenance Operations**: Cache cleanup and administrative operations with safety confirmations
-- **Developer Information**: Comprehensive application details with `about` command
-- **Enhanced CLI**: Comprehensive command aliases and improved user experience
-- **GUI Enhancements**: Global tab, version display, about dialog, and maintenance operations
-
-### 🔧 New Commands
-- `update` / `modify` / `change` / `edit` - Update credential values
-- `count` / `total` - Count credentials with various filtering options
-- `global-add` / `gadd` - Add global credentials
-- `global-get` / `gget` - Retrieve global credentials  
-- `global-list` / `glist` - List all global credentials
-- `global-update` / `gupdate` - Update global credentials
-- `global-delete` / `gdel` - Delete global credentials
-- `clean-cache` / `clear-cache` / `cache-clean` - Clean temporary files and cache
-- `about` / `info` - Show comprehensive application information
-- `delete-all` / `clear-all` / `nuke` - ⚠️ DESTRUCTIVE: Delete all data permanently
-
-### 🔒 Safety Features
-- **Confirmation Prompts**: All destructive operations require confirmation
-- **Force Flags**: Bypass confirmations for automation (use with caution)
-- **Comprehensive Warnings**: Clear indicators for dangerous operations
-- **Data Preservation**: Cache cleaning preserves all credential data
-
-### 🧪 Testing & Quality
-- Comprehensive integration test suite with 18+ test scenarios including new features
-- Cross-platform compatibility testing (Windows, macOS, Linux)
-- Enhanced documentation with detailed docstrings
-- Improved error handling and user feedback
-
-### 🎨 User Experience
-- Beautiful ASCII art banners for setup and GUI launch
-- Fixed emoji spacing in CLI output
-- Consistent command structure with intuitive aliases
-- Enhanced help system and documentation
-- Dynamic version display throughout the application
-
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on how to get started, development setup, and contribution guidelines.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a complete list of changes and version history.
 
 ## Contact
 

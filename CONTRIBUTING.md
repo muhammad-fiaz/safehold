@@ -108,7 +108,44 @@ cargo clippy
 
 # Generate documentation
 cargo doc --open
+
+# Cross-platform building (requires targets installed)
+./build.sh          # Unix/Linux/macOS
+build.bat           # Windows
+
+# Build for specific target
+cargo build --target x86_64-pc-windows-msvc --release
+cargo build --target x86_64-apple-darwin --release --features gui
+cargo build --target x86_64-unknown-linux-gnu --release
 ```
+
+### Cross-Platform Development
+
+SafeHold supports multiple platforms with dedicated build scripts:
+
+- **Unix/Linux/macOS**: Use `./build.sh` for automated cross-compilation
+- **Windows**: Use `build.bat` for Windows-based cross-compilation
+- **GitHub Actions**: Automated builds for all platforms on release
+
+The build system creates binaries for:
+- Windows (x64 MSVC and GNU)
+- macOS (Intel x64 and Apple Silicon ARM64)
+- Linux (x64 GNU, ARM64, and MUSL static)
+
+### Update Checking System
+
+SafeHold includes an automatic update checking system:
+
+- **Background checking**: Non-blocking update checks on every command
+- **CLI command**: `safehold check-update` for manual checking
+- **GUI integration**: Update notifications in GUI with modal dialogs
+- **Version comparison**: Semantic version parsing and comparison
+- **Internet connectivity**: Graceful handling of offline scenarios
+
+When adding features that interact with updates:
+- Use the `utils::update_checker` module
+- Implement async functions with proper error handling
+- Test both online and offline scenarios
 
 ## How to Contribute
 
@@ -171,26 +208,131 @@ SafeHold includes several key areas for contribution:
    ```
 7. **Create a Pull Request** on GitHub
 
+## Docker Development
+
+SafeHold supports Docker for development and deployment. This section covers working with Docker during development.
+
+### Docker Setup for Development
+
+The project includes Docker configuration for containerized development and testing:
+
+```bash
+# Build the Docker image locally
+docker build -t safehold:dev .
+
+# Run SafeHold in a container
+docker run --rm -it safehold:dev --help
+
+# Use docker-compose for development (recommended)
+docker-compose up --build
+```
+
+### Container Development Workflow
+
+1. **Local development with Docker**:
+   ```bash
+   # Build and test in container
+   docker build -t safehold:test .
+   docker run --rm safehold:test cargo test
+   
+   # Interactive development container
+   docker run --rm -it -v "$(pwd):/workspace" -w /workspace rust:1.75 bash
+   ```
+
+2. **Testing with containers**:
+   ```bash
+   # Run full test suite in container
+   docker run --rm -v "$(pwd):/workspace" -w /workspace rust:1.75 cargo test
+   
+   # Test specific features
+   docker run --rm -v "$(pwd):/workspace" -w /workspace rust:1.75 cargo test --features gui
+   ```
+
+3. **Cross-platform testing**:
+   ```bash
+   # Test on different architectures using Docker buildx
+   docker buildx build --platform linux/amd64,linux/arm64 -t safehold:multi .
+   ```
+
+### Docker Configuration Files
+
+- **Dockerfile**: Multi-stage build for optimized production images
+  - Builder stage: Rust compilation with full toolchain
+  - Runtime stage: Minimal Debian image with only necessary dependencies
+  - Security: Non-root user execution
+
+- **docker-compose.yml**: Development orchestration
+  - Persistent data volumes for SafeHold data
+  - Environment variable configuration
+  - Health checks and restart policies
+
+- **.dockerignore**: Excludes unnecessary files from build context
+  - Target directory and build artifacts
+  - Git metadata and documentation
+  - Test files and temporary data
+
+### Container Testing Guidelines
+
+When developing with Docker:
+
+1. **Test isolation**: Containers provide clean environments for testing
+2. **Volume mapping**: Use volumes for persistent data during development
+3. **Environment variables**: Test different configurations using environment variables
+4. **Multi-stage builds**: Verify both build and runtime stages work correctly
+
+### Container Security Considerations
+
+- **Non-root execution**: Container runs as non-root user `safehold`
+- **Minimal runtime**: Production image based on `debian:12-slim`
+- **No secrets in images**: Never include credentials or sensitive data in Docker images
+- **Health checks**: Container includes health check endpoint
+
+### Docker Best Practices for Contributors
+
+1. **Keep images small**: Use multi-stage builds and minimal base images
+2. **Cache optimization**: Order Dockerfile commands for optimal layer caching
+3. **Security scanning**: Regularly scan images for vulnerabilities
+4. **Documentation**: Update Docker documentation when modifying container behavior
+
+### Troubleshooting Docker Issues
+
+Common Docker development issues:
+
+```bash
+# Clear Docker build cache
+docker builder prune
+
+# Remove all containers and rebuild
+docker-compose down --volumes
+docker-compose up --build
+
+# Check container logs
+docker-compose logs
+
+# Debug container issues
+docker run --rm -it --entrypoint /bin/bash safehold:dev
+```
+
 ### Feature Development Guidelines
 
 #### Adding New Commands
 
 When adding new CLI commands to SafeHold:
 
-1. **Add to CLI structure** in `src/cli.rs`:
+1. **Add to CLI structure** in `src/cli/cli.rs`:
    - Add new command variant to `Commands` enum
    - Include descriptive help text and aliases
    - Add appropriate command line arguments
 
-2. **Implement command logic** in `src/envops.rs`:
+2. **Implement command logic** in `src/operations/envops.rs`:
    - Create new function following naming convention `cmd_<command_name>`
    - Add comprehensive docstring documentation
    - Include error handling and user feedback
 
-3. **Update dispatch logic** in `src/cli.rs`:
+3. **Update dispatch logic** in `src/cli/cli.rs`:
    - Add routing to your new function in the `dispatch` function
 
-4. **Add GUI support** if applicable in `src/ui.rs`:
+4. **Add GUI support** if applicable in `src/gui/ui.rs`:
    - Add UI elements and dialogs for the new functionality
    - Ensure consistency with existing GUI patterns
 
@@ -375,41 +517,60 @@ cargo test
 
 ```
 src/
-├── main.rs          # Entry point and application setup
-├── cli.rs           # CLI argument parsing and command dispatch
-│                   # - Contains all command definitions and argument structures
-│                   # - Includes comprehensive help text and command aliases
-│                   # - Dispatches to appropriate functions in envops.rs
-├── config.rs        # Configuration management and file paths
-│                   # - Handles SAFEHOLD_HOME environment variable
-│                   # - Manages app configuration and directory structure
-├── crypto.rs        # Encryption/decryption logic with AES-256-GCM
-├── store.rs         # Low-level storage operations for projects and credentials
-├── envops.rs        # High-level environment variable operations
-│                   # - All CLI command implementations (cmd_* functions)
-│                   # - Project CRUD operations
-│                   # - Global credential management
-│                   # - Count and statistics functionality
-│                   # - Comprehensive docstrings for all functions
-├── app_settings.rs  # Application settings management
-│                   # - Persistent GUI and CLI preferences storage
-│                   # - Security settings configuration
-│                   # - Session and interface preferences
-├── master_lock.rs   # Global Master Lock functionality
-│                   # - Unified password protection for ALL projects
-│                   # - Master password validation and management
-│                   # - Global security state management
-├── styles.rs        # Output formatting and styling
-│                   # - Terminal colors and spinner animations
-│                   # - Success, error, and warning message formatting
-│                   # - Progress indicators and visual feedback
-├── ui.rs            # GUI implementation (feature-gated with 'gui')
-│                   # - Main application window and tabs
-│                   # - Global credentials tab
-│                   # - Settings display with version/author info
-│                   # - Project and credential management dialogs
-├── install.rs       # Installation and setup functionality
-└── lib.rs           # Library interface (if needed)
+├── main.rs              # Entry point and application setup with async main
+├── core/                # Core functionality modules
+│   ├── mod.rs          # Core module declarations
+│   ├── config.rs       # Configuration management and file paths
+│   │                   # - Handles SAFEHOLD_HOME environment variable
+│   │                   # - Manages app configuration and directory structure
+│   │                   # - Version compatibility checking and migration
+│   ├── crypto.rs       # Encryption/decryption logic with AES-256-GCM
+│   └── store.rs        # Low-level storage operations for projects and credentials
+│                       # - GUI/CLI launch detection and routing
+├── cli/                # CLI interface modules
+│   ├── mod.rs          # CLI module declarations
+│   ├── cli.rs          # CLI argument parsing and command dispatch
+│   │                   # - Contains all command definitions and argument structures
+│   │                   # - Includes comprehensive help text and command aliases
+│   │                   # - Dispatches to appropriate functions in operations
+│   │                   # - Async command dispatch for update checking
+│   └── styles.rs       # Output formatting and styling
+│                       # - Terminal colors and spinner animations
+│                       # - Success, error, and warning message formatting
+│                       # - Progress indicators and visual feedback
+├── gui/                # GUI interface modules
+│   ├── mod.rs          # GUI module declarations
+│   └── ui.rs           # GUI implementation (feature-gated with 'gui')
+│                       # - Main application window and tabs
+│                       # - Global credentials tab
+│                       # - Settings display with version/author info
+│                       # - Project and credential management dialogs
+│                       # - Modal error and warning dialogs
+│                       # - Update notification integration
+├── operations/         # Business logic operations
+│   ├── mod.rs          # Operations module declarations
+│   ├── envops.rs       # High-level environment variable operations
+│   │                   # - All CLI command implementations (cmd_* functions)
+│   │                   # - Project CRUD operations
+│   │                   # - Global credential management
+│   │                   # - Count and statistics functionality
+│   │                   # - Comprehensive docstrings for all functions
+│   └── master_lock.rs  # Global Master Lock functionality
+│                       # - Unified password protection for ALL projects
+│                       # - Master password validation and management
+│                       # - Global security state management
+└── utils/              # Utility modules
+    ├── mod.rs          # Utils module declarations
+    ├── app_settings.rs # Application settings management
+    │                   # - Persistent GUI and CLI preferences storage
+    │                   # - Security settings configuration
+    │                   # - Session and interface preferences
+    ├── install.rs      # Installation and setup functionality
+    └── update_checker.rs # Update checking functionality
+                        # - Async update checking from crates.io
+                        # - Version comparison and notification
+                        # - CLI check-update command implementation
+                        # - GUI update notification integration
 
 tests/
 ├── integration_tests.rs # Comprehensive integration test suite

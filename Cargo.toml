@@ -1,6 +1,6 @@
 [package]
 name = "safehold"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "A secure cross-platform environment variable manager with CLI and optional GUI for encrypted storage of secrets and config."
 repository = "https://github.com/muhammad-fiaz/safehold"
@@ -41,6 +41,9 @@ which = "8"
 rpassword = "7"
 walkdir = "2"
 ctrlc = "3"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
+open = "5"
 
 # GUI-only dependencies (feature gated)
 eframe = { version = "0.32", optional = true }

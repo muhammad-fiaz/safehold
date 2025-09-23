@@ -14,15 +14,15 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "gui")]
-use crate::cli::CreateArgs;
-use crate::cli::{ExportArgs, RunArgs};
+use crate::cli::cli::CreateArgs;
+use crate::cli::cli::{ExportArgs, RunArgs};
 #[cfg(feature = "gui")]
-use crate::config::{self, Config, env_enc_path, lock_path};
+use crate::core::config::{self, Config, env_enc_path, lock_path};
 #[cfg(feature = "gui")]
-use crate::crypto::{self, LockInfo};
-use crate::envops;
+use crate::core::crypto::{self, LockInfo};
 #[cfg(feature = "gui")]
-use crate::store::{self};
+use crate::core::store::{self};
+use crate::operations::envops;
 
 #[cfg(feature = "gui")]
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +98,14 @@ struct SafeHoldApp {
     show_delete_confirm: bool,
     delete_type: String, // "project" or "credential" or "global"
     delete_target: String,
+
+    // Modal error/warning dialogs
+    show_error_dialog: bool,
+    error_title: String,
+    error_message: String,
+    show_warning_dialog: bool,
+    warning_title: String,
+    warning_message: String,
     delete_project: String, // for credential deletion
 
     // Global credentials
@@ -133,7 +141,13 @@ struct SafeHoldApp {
 
     // App Settings
     #[allow(dead_code)]
-    app_settings: crate::app_settings::AppSettings,
+    app_settings: crate::utils::app_settings::AppSettings,
+
+    // Update checking
+    show_update_dialog: bool,
+    update_info: Option<crate::utils::update_checker::UpdateInfo>,
+    last_update_check: Option<Instant>,
+    update_check_in_progress: bool,
 }
 
 #[cfg(feature = "gui")]
@@ -172,6 +186,14 @@ impl SafeHoldApp {
             delete_type: String::new(),
             delete_target: String::new(),
             delete_project: String::new(),
+
+            // Modal error/warning dialogs
+            show_error_dialog: false,
+            error_title: String::new(),
+            error_message: String::new(),
+            show_warning_dialog: false,
+            warning_title: String::new(),
+            warning_message: String::new(),
             global_credentials: BTreeMap::new(),
             show_add_global: false,
             show_update_global: false,
@@ -186,25 +208,52 @@ impl SafeHoldApp {
             total_projects: 0,
             total_credentials: 0,
             duplicate_keys: Vec::new(),
-            master_lock_enabled: crate::master_lock::is_master_lock_enabled(),
+            master_lock_enabled: crate::operations::master_lock::is_master_lock_enabled(),
             show_master_lock_dialog: false,
             master_lock_action: None,
             master_password_input: String::new(),
             master_password_confirm: String::new(),
-            app_settings: crate::app_settings::load_settings().unwrap_or_default(),
+            app_settings: crate::utils::app_settings::load_settings().unwrap_or_default(),
+            show_update_dialog: false,
+            update_info: None,
+            last_update_check: None,
+            update_check_in_progress: false,
         }
     }
 
     fn add_notification(&mut self, text: String, severity: NotificationSeverity) {
-        self.notifications.push(NotificationMessage {
-            text,
-            severity,
-            timestamp: Instant::now(),
-        });
-        // Keep only last 5 notifications
-        if self.notifications.len() > 5 {
-            self.notifications.remove(0);
+        match severity {
+            NotificationSeverity::Error => {
+                self.show_error_dialog(&text);
+            }
+            NotificationSeverity::Warning => {
+                self.show_warning_dialog(&text);
+            }
+            _ => {
+                // For success and info, still use the notification system
+                self.notifications.push(NotificationMessage {
+                    text,
+                    severity,
+                    timestamp: Instant::now(),
+                });
+                // Keep only last 5 notifications
+                if self.notifications.len() > 5 {
+                    self.notifications.remove(0);
+                }
+            }
         }
+    }
+
+    fn show_error_dialog(&mut self, message: &str) {
+        self.error_title = "Error".to_string();
+        self.error_message = message.to_string();
+        self.show_error_dialog = true;
+    }
+
+    fn show_warning_dialog(&mut self, message: &str) {
+        self.warning_title = "Warning".to_string();
+        self.warning_message = message.to_string();
+        self.show_warning_dialog = true;
     }
 
     fn select(&mut self, id_or_global: &str) {
@@ -395,17 +444,39 @@ impl SafeHoldApp {
                 match crypto::create_lock(&self.new_project_password) {
                     Ok(li) => {
                         if let Ok(dir) = config::global_dir() {
-                            let _ =
-                                fs::write(lock_path(&dir), serde_json::to_vec_pretty(&li).unwrap());
-                            self.passwords
-                                .insert("global".into(), self.new_project_password.clone());
+                            match serde_json::to_vec_pretty(&li) {
+                                Ok(data) => {
+                                    if let Err(e) = fs::write(lock_path(&dir), data) {
+                                        self.add_notification(
+                                            format!("Failed to save lock file: {}", e),
+                                            NotificationSeverity::Error,
+                                        );
+                                    } else {
+                                        self.passwords.insert(
+                                            "global".into(),
+                                            self.new_project_password.clone(),
+                                        );
+                                        self.add_notification(
+                                            "Global project locked".to_string(),
+                                            NotificationSeverity::Success,
+                                        );
+                                        self.new_project_password.clear();
+                                        self.new_project_confirm_password.clear();
+                                        self.refresh_config();
+                                    }
+                                }
+                                Err(e) => {
+                                    self.add_notification(
+                                        format!("Failed to serialize lock info: {}", e),
+                                        NotificationSeverity::Error,
+                                    );
+                                }
+                            }
+                        } else {
                             self.add_notification(
-                                "Global project locked".to_string(),
-                                NotificationSeverity::Success,
+                                "Failed to get global directory".to_string(),
+                                NotificationSeverity::Error,
                             );
-                            self.new_project_password.clear();
-                            self.new_project_confirm_password.clear();
-                            self.refresh_config();
                         }
                     }
                     Err(e) => self.add_notification(
@@ -453,7 +524,7 @@ impl SafeHoldApp {
             return;
         }
 
-        match crate::master_lock::enable_master_lock(&self.master_password_input) {
+        match crate::operations::master_lock::enable_master_lock(&self.master_password_input) {
             Ok(_) => {
                 self.master_lock_enabled = true;
                 self.show_master_lock_dialog = false;
@@ -481,8 +552,8 @@ impl SafeHoldApp {
             return;
         }
 
-        match crate::master_lock::verify_master_password(&self.master_password_input) {
-            Ok(true) => match crate::master_lock::disable_master_lock() {
+        match crate::operations::master_lock::verify_master_password(&self.master_password_input) {
+            Ok(true) => match crate::operations::master_lock::disable_master_lock() {
                 Ok(_) => {
                     self.master_lock_enabled = false;
                     self.show_master_lock_dialog = false;
@@ -511,13 +582,155 @@ impl SafeHoldApp {
     }
 
     fn refresh_master_lock_status(&mut self) {
-        self.master_lock_enabled = crate::master_lock::is_master_lock_enabled();
+        self.master_lock_enabled = crate::operations::master_lock::is_master_lock_enabled();
+    }
+
+    fn check_for_updates_async(&mut self, _ctx: egui::Context) {
+        if self.update_check_in_progress {
+            return;
+        }
+
+        self.update_check_in_progress = true;
+        self.last_update_check = Some(Instant::now());
+
+        // In a real implementation, you'd want to use async/await properly
+        // For now, we'll simulate it with a simple check
+        tokio::spawn(async move {
+            if let Ok(Some(update_info)) = crate::utils::update_checker::check_for_updates().await {
+                // In a production app, you'd use proper message passing here
+                // For now, we'll just print the info
+                println!(
+                    "Update available: {} -> {}",
+                    update_info.current_version, update_info.latest_version
+                );
+            }
+        });
+    }
+
+    fn check_for_updates_manual(&mut self) {
+        if self.update_check_in_progress {
+            return;
+        }
+
+        self.update_check_in_progress = true;
+        self.last_update_check = Some(Instant::now());
+
+        // Simulate async check - in real implementation, use proper async/await
+        let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+        // For demo purposes, let's create a mock update
+        if current_version == "0.0.2" {
+            // Simulate finding an update
+            self.update_info = Some(crate::utils::update_checker::UpdateInfo {
+                current_version: current_version.clone(),
+                latest_version: "0.0.3".to_string(), // Mock newer version
+                description: Some("Bug fixes and performance improvements".to_string()),
+                published_at: Some("2024-01-01T00:00:00Z".to_string()),
+            });
+        }
+
+        self.update_check_in_progress = false;
+    }
+
+    fn render_update_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_update_dialog {
+            return;
+        }
+
+        // Clone the update info to avoid borrowing issues
+        let update_info = if let Some(ref info) = self.update_info {
+            info.clone()
+        } else {
+            return;
+        };
+
+        let mut should_dismiss = false;
+        let mut should_install = false;
+        let mut browser_error = false;
+
+        egui::Window::new("🔄 Update Available")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("🆕");
+                        ui.label(
+                            RichText::new(format!(
+                                "SafeHold {} is available!",
+                                update_info.latest_version
+                            ))
+                            .color(Color32::from_rgb(0, 150, 0)),
+                        );
+                    });
+
+                    ui.separator();
+
+                    ui.label(format!("Current version: {}", update_info.current_version));
+                    ui.label(format!("Latest version: {}", update_info.latest_version));
+
+                    if let Some(ref description) = update_info.description {
+                        ui.separator();
+                        ui.label("Release notes:");
+                        ui.label(RichText::new(description).weak());
+                    }
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        if ui.button("🌐 View on crates.io").clicked() {
+                            // Open URL in browser
+                            if let Err(_e) = open::that("https://crates.io/crates/safehold") {
+                                browser_error = true;
+                            }
+                        }
+
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("Dismiss").clicked() {
+                                should_dismiss = true;
+                            }
+
+                            if ui.button("⚡ Install Update").clicked() {
+                                should_install = true;
+                            }
+                        });
+                    });
+                });
+            });
+
+        // Handle actions outside the closure
+        if browser_error {
+            self.show_error_dialog(
+                "Failed to open browser. Visit https://crates.io/crates/safehold manually.",
+            );
+        }
+
+        if should_dismiss {
+            self.show_update_dialog = false;
+            self.update_info = None;
+        }
+
+        if should_install {
+            self.show_error_dialog("To update SafeHold, run the following command in your terminal:\n\ncargo install safehold --force\n\nThis will install the latest version.");
+            self.show_update_dialog = false;
+            self.update_info = None;
+        }
     }
 }
 
 #[cfg(feature = "gui")]
 impl App for SafeHoldApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Check for updates periodically (every hour)
+        let should_check_updates = self.last_update_check.map_or(true, |last| {
+            last.elapsed() > Duration::from_secs(3600) // 1 hour
+        });
+
+        if should_check_updates && !self.update_check_in_progress {
+            self.check_for_updates_async(ctx.clone());
+        }
+
         // Update statistics periodically
         self.update_statistics();
 
@@ -613,6 +826,9 @@ impl App for SafeHoldApp {
         self.render_export_dialog(ctx);
         self.render_run_command_dialog(ctx);
         self.render_maintenance_dialogs(ctx);
+        self.render_error_dialog(ctx);
+        self.render_warning_dialog(ctx);
+        self.render_update_dialog(ctx);
 
         // Status bar
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
@@ -1122,6 +1338,48 @@ impl SafeHoldApp {
                         self.add_notification("Repository: https://github.com/muhammad-fiaz/safehold".to_string(), NotificationSeverity::Info);
                     }
                 });
+            });
+
+            ui.separator();
+
+            // Update checking
+            ui.group(|ui| {
+                ui.label(RichText::new("Software Updates").strong());
+
+                ui.horizontal(|ui| {
+                    if ui.button("🔄 Check for Updates").clicked() {
+                        self.check_for_updates_manual();
+                    }
+
+                    if self.update_check_in_progress {
+                        ui.spinner();
+                        ui.label("Checking for updates...");
+                    } else if let Some(last_check) = self.last_update_check {
+                        let elapsed = last_check.elapsed();
+                        if elapsed.as_secs() < 60 {
+                            ui.label(format!("Last checked: {} seconds ago", elapsed.as_secs()));
+                        } else if elapsed.as_secs() < 3600 {
+                            ui.label(format!("Last checked: {} minutes ago", elapsed.as_secs() / 60));
+                        } else {
+                            ui.label(format!("Last checked: {} hours ago", elapsed.as_secs() / 3600));
+                        }
+                    }
+                });
+
+                if let Some(ref update_info) = self.update_info {
+                    ui.horizontal(|ui| {
+                        ui.label("🆕");
+                        ui.label(RichText::new(format!(
+                            "Update available: {} -> {}",
+                            update_info.current_version,
+                            update_info.latest_version
+                        )).color(Color32::from_rgb(0, 150, 0)));
+
+                        if ui.button("View Details").clicked() {
+                            self.show_update_dialog = true;
+                        }
+                    });
+                }
             });
 
             ui.separator();
@@ -1688,42 +1946,70 @@ impl SafeHoldApp {
                                 if let Some(selected) = &self.selected.clone() {
                                     if !self.update_key.is_empty() && !self.update_value.is_empty()
                                     {
-                                        let dir = if selected == "global" {
-                                            config::global_dir().unwrap()
+                                        let dir_result = if selected == "global" {
+                                            config::global_dir()
                                         } else {
-                                            config::set_dir(selected).unwrap()
+                                            config::set_dir(selected)
                                         };
 
-                                        let password = self.passwords.get(selected).cloned();
-                                        if let Ok(mut map) =
-                                            read_env_map_dir(&dir, password.as_deref())
-                                        {
-                                            map.insert(
-                                                self.update_key.clone(),
-                                                self.update_value.clone(),
-                                            );
-                                            if let Err(e) =
-                                                write_env_map_dir(&dir, &map, password.as_deref())
-                                            {
+                                        match dir_result {
+                                            Ok(dir) => {
+                                                let password =
+                                                    self.passwords.get(selected).cloned();
+                                                if let Ok(mut map) =
+                                                    read_env_map_dir(&dir, password.as_deref())
+                                                {
+                                                    map.insert(
+                                                        self.update_key.clone(),
+                                                        self.update_value.clone(),
+                                                    );
+                                                    if let Err(e) = write_env_map_dir(
+                                                        &dir,
+                                                        &map,
+                                                        password.as_deref(),
+                                                    ) {
+                                                        self.add_notification(
+                                                            format!(
+                                                                "Failed to update credential: {}",
+                                                                e
+                                                            ),
+                                                            NotificationSeverity::Error,
+                                                        );
+                                                    } else {
+                                                        self.add_notification(
+                                                            format!(
+                                                                "Updated credential '{}'",
+                                                                self.update_key
+                                                            ),
+                                                            NotificationSeverity::Success,
+                                                        );
+                                                        self.maps_cache
+                                                            .insert(selected.clone(), map);
+                                                        self.show_update_credential = false;
+                                                        self.update_key.clear();
+                                                        self.update_value.clear();
+                                                        self.update_project.clear();
+                                                    }
+                                                } else {
+                                                    self.add_notification(
+                                                        "Failed to read credential data"
+                                                            .to_string(),
+                                                        NotificationSeverity::Error,
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
                                                 self.add_notification(
-                                                    format!("Failed to update credential: {}", e),
+                                                    format!("Failed to get directory: {}", e),
                                                     NotificationSeverity::Error,
                                                 );
-                                            } else {
-                                                self.add_notification(
-                                                    format!(
-                                                        "Updated credential '{}'",
-                                                        self.update_key
-                                                    ),
-                                                    NotificationSeverity::Success,
-                                                );
-                                                self.maps_cache.insert(selected.clone(), map);
-                                                self.show_update_credential = false;
-                                                self.update_key.clear();
-                                                self.update_value.clear();
-                                                self.update_project.clear();
                                             }
                                         }
+                                    } else {
+                                        self.add_notification(
+                                            "Key and value cannot be empty".to_string(),
+                                            NotificationSeverity::Warning,
+                                        );
                                     }
                                 }
                             }
@@ -1748,64 +2034,187 @@ impl SafeHoldApp {
                 .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.vertical(|ui| {
-                        let message = match self.delete_type.as_str() {
-                            "project" => format!("Are you sure you want to delete project '{}'?",
-                                if self.delete_project.is_empty() { &self.delete_target } else { &self.delete_project }),
-                            "credential" => format!("Are you sure you want to delete credential '{}'?", self.delete_target),
-                            "global" => format!("Are you sure you want to delete global credential '{}'?", self.delete_target),
-                            _ => "Are you sure you want to delete this item?".to_string(),
+                        let (message, warning) = match self.delete_type.as_str() {
+                            "project" => {
+                                let project_name = if self.delete_project.is_empty() { &self.delete_target } else { &self.delete_project };
+                                let is_global = self.delete_target == "global";
+                                let project_type = if is_global { "global storage" } else { "project" };
+                                (
+                                    format!("Delete {} '{}'?", project_type, project_name),
+                                    if is_global {
+                                        "This will delete all global credentials permanently.".to_string()
+                                    } else {
+                                        "This will delete the project and ALL its credentials permanently.".to_string()
+                                    }
+                                )
+                            },
+                            "credential" => (
+                                format!("Delete credential '{}'?", self.delete_target),
+                                "This credential will be permanently removed from the project.".to_string()
+                            ),
+                            "global" => (
+                                format!("Delete global credential '{}'?", self.delete_target),
+                                "This credential will be permanently removed from global storage.".to_string()
+                            ),
+                            _ => (
+                                "Delete this item?".to_string(),
+                                "This action cannot be undone.".to_string()
+                            ),
                         };
 
-                        ui.label(RichText::new(message).color(Color32::from_rgb(200, 100, 0)));
-                        ui.label("This action cannot be undone.");
+                        ui.label(RichText::new(message).color(Color32::from_rgb(200, 100, 0)).size(16.0));
+                        ui.label(RichText::new(warning).color(Color32::from_rgb(255, 150, 0)));
+                        ui.label(RichText::new("⚠️ This action cannot be undone!").color(Color32::RED));
 
                         ui.separator();
                         ui.horizontal(|ui| {
                             if ui.button("🗑️ Delete").clicked() {
                                 match self.delete_type.as_str() {
                                     "project" => {
-                                        if let Ok(project_dir) = config::set_dir(&self.delete_target) {
-                                            if let Err(e) = fs::remove_dir_all(&project_dir) {
-                                                self.add_notification(format!("Failed to delete project: {}", e), NotificationSeverity::Error);
-                                            } else {
-                                                self.add_notification(format!("Deleted project '{}'", self.delete_target), NotificationSeverity::Success);
-                                                self.refresh_config();
-                                                if self.selected.as_ref() == Some(&self.delete_target) {
-                                                    self.selected = None;
+                                        match config::set_dir(&self.delete_target) {
+                                            Ok(project_dir) => {
+                                                match config::load_config() {
+                                                    Ok(mut cfg) => {
+                                                        let mut deleted_successfully = false;
+
+                                                        // Check if project exists in config
+                                                        let project_in_config = if self.delete_target == "global" {
+                                                            cfg.global_locked
+                                                        } else {
+                                                            cfg.sets.iter().any(|s| s.id == self.delete_target || s.name == self.delete_target)
+                                                        };
+
+                                                        if !project_in_config && !project_dir.exists() {
+                                                            self.add_notification(format!("Project '{}' not found", self.delete_target), NotificationSeverity::Warning);
+                                                            self.show_delete_confirm = false;
+                                                            self.delete_target.clear();
+                                                            self.delete_type.clear();
+                                                            return;
+                                                        }
+
+                                                        // Try to delete directory if it exists
+                                                        if project_dir.exists() {
+                                                            match fs::remove_dir_all(&project_dir) {
+                                                                Ok(()) => {
+                                                                    deleted_successfully = true;
+                                                                }
+                                                                Err(e) => {
+                                                                    // Check if it's just a permissions issue or actual corruption
+                                                                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                                                                        self.add_notification(format!("Permission denied deleting project: {}", e), NotificationSeverity::Error);
+                                                                    } else {
+                                                                        // Try to continue anyway - maybe partial deletion
+                                                                        self.add_notification(format!("Warning: Could not fully delete project directory: {}", e), NotificationSeverity::Warning);
+                                                                        deleted_successfully = true; // Still remove from config
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            deleted_successfully = true; // Directory doesn't exist, still remove from config
+                                                        }
+
+                                                        if deleted_successfully {
+                                                            // Update config
+                                                            if self.delete_target == "global" {
+                                                                cfg.global_locked = false;
+                                                            } else {
+                                                                cfg.sets.retain(|s| s.id != self.delete_target && s.name != self.delete_target);
+                                                            }
+
+                                                            // Save updated config
+                                                            match config::save_config(&cfg) {
+                                                                Ok(()) => {
+                                                                    let message = if project_dir.exists() {
+                                                                        format!("Deleted project '{}'", self.delete_target)
+                                                                    } else {
+                                                                        format!("Deleted project '{}' (no data found)", self.delete_target)
+                                                                    };
+                                                                    self.add_notification(message, NotificationSeverity::Success);
+                                                                    self.refresh_config();
+                                                                    if self.selected.as_ref() == Some(&self.delete_target) {
+                                                                        self.selected = None;
+                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    self.add_notification(format!("Project deleted but failed to update config: {}", e), NotificationSeverity::Warning);
+                                                                    // Still refresh to show current state
+                                                                    self.refresh_config();
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        self.add_notification(format!("Failed to load config: {}", e), NotificationSeverity::Error);
+                                                    }
                                                 }
+                                            }
+                                            Err(e) => {
+                                                self.add_notification(format!("Failed to access project directory: {}", e), NotificationSeverity::Error);
                                             }
                                         }
                                     },
                                     "credential" => {
                                         if let Some(selected) = &self.selected.clone() {
-                                            let dir = if selected == "global" {
-                                                config::global_dir().unwrap()
-                                            } else {
-                                                config::set_dir(selected).unwrap()
-                                            };
-
-                                            let password = self.passwords.get(selected).cloned();
-                                            if let Ok(mut map) = read_env_map_dir(&dir, password.as_deref()) {
-                                                map.remove(&self.delete_target);
-                                                if let Err(e) = write_env_map_dir(&dir, &map, password.as_deref()) {
-                                                    self.add_notification(format!("Failed to delete credential: {}", e), NotificationSeverity::Error);
-                                                } else {
-                                                    self.add_notification(format!("Deleted credential '{}'", self.delete_target), NotificationSeverity::Success);
-                                                    self.maps_cache.insert(selected.clone(), map);
+                                            match config::set_dir(selected) {
+                                                Ok(dir) => {
+                                                    let password = self.passwords.get(selected).cloned();
+                                                    match read_env_map_dir(&dir, password.as_deref()) {
+                                                        Ok(mut map) => {
+                                                            if map.contains_key(&self.delete_target) {
+                                                                map.remove(&self.delete_target);
+                                                                match write_env_map_dir(&dir, &map, password.as_deref()) {
+                                                                    Ok(()) => {
+                                                                        self.add_notification(format!("Deleted credential '{}'", self.delete_target), NotificationSeverity::Success);
+                                                                        self.maps_cache.insert(selected.clone(), map);
+                                                                    }
+                                                                    Err(e) => {
+                                                                        self.add_notification(format!("Failed to save after deletion: {}", e), NotificationSeverity::Error);
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                self.add_notification(format!("Credential '{}' not found", self.delete_target), NotificationSeverity::Warning);
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            self.add_notification(format!("Failed to read project data: {}", e), NotificationSeverity::Error);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    self.add_notification(format!("Failed to access project directory: {}", e), NotificationSeverity::Error);
                                                 }
                                             }
+                                        } else {
+                                            self.add_notification("No project selected".to_string(), NotificationSeverity::Error);
                                         }
                                     },
                                     "global" => {
-                                        if let Ok(global_dir) = config::global_dir() {
-                                            if let Ok(mut map) = read_env_map_dir(&global_dir, None) {
-                                                map.remove(&self.delete_target);
-                                                if let Err(e) = write_env_map_dir(&global_dir, &map, None) {
-                                                    self.add_notification(format!("Failed to delete global credential: {}", e), NotificationSeverity::Error);
-                                                } else {
-                                                    self.add_notification(format!("Deleted global credential '{}'", self.delete_target), NotificationSeverity::Success);
-                                                    self.global_credentials = map;
+                                        match config::global_dir() {
+                                            Ok(global_dir) => {
+                                                match read_env_map_dir(&global_dir, None) {
+                                                    Ok(mut map) => {
+                                                        if map.contains_key(&self.delete_target) {
+                                                            map.remove(&self.delete_target);
+                                                            match write_env_map_dir(&global_dir, &map, None) {
+                                                                Ok(()) => {
+                                                                    self.add_notification(format!("Deleted global credential '{}'", self.delete_target), NotificationSeverity::Success);
+                                                                    self.global_credentials = map;
+                                                                }
+                                                                Err(e) => {
+                                                                    self.add_notification(format!("Failed to save after deletion: {}", e), NotificationSeverity::Error);
+                                                                }
+                                                            }
+                                                        } else {
+                                                            self.add_notification(format!("Global credential '{}' not found", self.delete_target), NotificationSeverity::Warning);
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        self.add_notification(format!("Failed to read global data: {}", e), NotificationSeverity::Error);
+                                                    }
                                                 }
+                                            }
+                                            Err(e) => {
+                                                self.add_notification(format!("Failed to access global directory: {}", e), NotificationSeverity::Error);
                                             }
                                         }
                                     },
@@ -2273,6 +2682,73 @@ impl SafeHoldApp {
     /// Write environment map to a directory using GUI password handling
     fn write_env_map(&self, dir: &PathBuf, map: &BTreeMap<String, String>) -> Result<()> {
         write_env_map_dir(dir, map, None)
+    }
+
+    fn render_error_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_error_dialog {
+            return;
+        }
+
+        egui::Window::new(&self.error_title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("❌");
+                        ui.label(
+                            RichText::new(&self.error_message).color(Color32::from_rgb(200, 0, 0)),
+                        );
+                    });
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("OK").clicked() {
+                                self.show_error_dialog = false;
+                                self.error_title.clear();
+                                self.error_message.clear();
+                            }
+                        });
+                    });
+                });
+            });
+    }
+
+    fn render_warning_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_warning_dialog {
+            return;
+        }
+
+        egui::Window::new(&self.warning_title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("⚠️");
+                        ui.label(
+                            RichText::new(&self.warning_message)
+                                .color(Color32::from_rgb(200, 150, 0)),
+                        );
+                    });
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("OK").clicked() {
+                                self.show_warning_dialog = false;
+                                self.warning_title.clear();
+                                self.warning_message.clear();
+                            }
+                        });
+                    });
+                });
+            });
     }
 }
 

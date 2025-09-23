@@ -1,4 +1,4 @@
-use crate::styles;
+use crate::cli::styles;
 use anyhow::Result;
 use std::io::{self, Write};
 
@@ -105,7 +105,7 @@ fn prompt_gui_selection() -> Result<bool> {
 
 /// Check if this is the first run of SafeHold
 pub fn is_first_run() -> bool {
-    let config_dir = match crate::config::base_dir() {
+    let config_dir = match crate::core::config::base_dir() {
         Ok(dir) => dir,
         Err(_) => return true,
     };
@@ -117,7 +117,7 @@ pub fn is_first_run() -> bool {
 
 /// Mark installation as complete
 fn mark_installation_complete() -> Result<()> {
-    let config_dir = crate::config::base_dir()?;
+    let config_dir = crate::core::config::base_dir()?;
     std::fs::create_dir_all(&config_dir)?;
 
     let install_marker = config_dir.join(".installed");

@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Windows
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: safehold-windows-x64.exe
+            archive: zip
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            name: safehold-windows-x64-gnu.exe
+            archive: zip
+          
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: safehold-macos-x64
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: safehold-macos-arm64
+            archive: tar.gz
+          
+          # Linux
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: safehold-linux-x64
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: safehold-linux-arm64
+            archive: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: safehold-linux-x64-musl
+            archive: tar.gz
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install cross-compilation tools (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu musl-tools
+        if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        fi
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build CLI version
+      run: cargo build --release --target ${{ matrix.target }} --no-default-features
+
+    - name: Build GUI version
+      run: cargo build --release --target ${{ matrix.target }} --features gui
+
+    - name: Prepare binaries (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        mkdir dist
+        copy target\${{ matrix.target }}\release\safehold.exe dist\safehold-cli.exe
+        copy target\${{ matrix.target }}\release\safehold.exe dist\safehold-gui.exe
+        copy README.md dist\
+        copy CHANGELOG.md dist\
+        copy LICENSE dist\
+
+    - name: Prepare binaries (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        mkdir dist
+        cp target/${{ matrix.target }}/release/safehold dist/safehold-cli
+        cp target/${{ matrix.target }}/release/safehold dist/safehold-gui
+        cp README.md dist/
+        cp CHANGELOG.md dist/
+        cp LICENSE dist/
+
+    - name: Create archive (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd dist
+        powershell -command "Compress-Archive -Path * -DestinationPath ../${{ matrix.name }}.zip"
+
+    - name: Create archive (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cd dist
+        tar czf ../${{ matrix.name }}.tar.gz *
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.name }}
+        path: |
+          *.zip
+          *.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          safehold-windows-x64.exe/*.zip
+          safehold-windows-x64-gnu.exe/*.zip
+          safehold-macos-x64/*.tar.gz
+          safehold-macos-arm64/*.tar.gz
+          safehold-linux-x64/*.tar.gz
+          safehold-linux-arm64/*.tar.gz
+          safehold-linux-x64-musl/*.tar.gz
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
