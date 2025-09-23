@@ -15,6 +15,8 @@ pub struct Config {
     pub sets: Vec<SetMeta>,
     pub global_locked: bool,
     pub created_at: String,
+    #[serde(default = "default_version")]
+    pub version: String,
 }
 
 /// Metadata for each credential project.
@@ -25,6 +27,10 @@ pub struct SetMeta {
     pub locked: bool, // requires password
 }
 
+fn default_version() -> String {
+    "0.0.2".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -33,6 +39,7 @@ impl Default for Config {
             created_at: OffsetDateTime::now_utc()
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
+            version: default_version(),
         }
     }
 }
@@ -66,8 +73,43 @@ pub fn ensure_layout() -> Result<PathBuf> {
 pub fn load_config() -> Result<Config> {
     let path = base_dir()?.join("config.json");
     let data = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-    let cfg = serde_json::from_slice(&data).with_context(|| format!("parse {}", path.display()))?;
-    Ok(cfg)
+
+    // Try to parse as current version first
+    match serde_json::from_slice::<Config>(&data) {
+        Ok(mut cfg) => {
+            // If version is missing or old, update it
+            if cfg.version.is_empty() || cfg.version == "0.0.1" {
+                cfg.version = default_version();
+                // Save the updated config to migrate it
+                save_config(&cfg)?;
+            }
+            Ok(cfg)
+        }
+        Err(_) => {
+            // Try to parse as legacy config (without version field)
+            #[derive(Deserialize)]
+            struct LegacyConfig {
+                pub sets: Vec<SetMeta>,
+                pub global_locked: bool,
+                pub created_at: String,
+            }
+
+            let legacy: LegacyConfig = serde_json::from_slice(&data)
+                .with_context(|| format!("parse legacy config {}", path.display()))?;
+
+            // Migrate to new format
+            let cfg = Config {
+                sets: legacy.sets,
+                global_locked: legacy.global_locked,
+                created_at: legacy.created_at,
+                version: default_version(),
+            };
+
+            // Save the migrated config
+            save_config(&cfg)?;
+            Ok(cfg)
+        }
+    }
 }
 
 pub fn save_config(cfg: &Config) -> Result<()> {
@@ -171,7 +213,7 @@ pub fn save_current_version() -> Result<()> {
 
 /// Display version compatibility message
 pub fn display_version_message(old_version: &str) -> Result<()> {
-    use crate::styles;
+    use crate::cli::styles;
 
     println!();
     println!("┌─────────────────────────────────────────────────────────────────┐");

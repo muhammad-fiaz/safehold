@@ -1,13 +1,13 @@
 //! Environment operations: add/get/list/delete/export/run/show/clean
-use crate::cli::{
-    CountArgs, ExportArgs, GlobalKeyArgs, GlobalKeyValueArgs, ProjectKeyArgs, ProjectKeyValueArgs,
-    ProjectTargetArgs, RunArgs,
+use crate::cli::cli::{
+    CountArgs, ExportArgs, GlobalKeyArgs, GlobalKeyArgsForce, GlobalKeyValueArgs, ProjectKeyArgs,
+    ProjectKeyArgsForce, ProjectKeyValueArgs, ProjectTargetArgs, RunArgs,
 };
-use crate::config::{self, env_enc_path, lock_path};
-use crate::crypto::{self, LockInfo};
+use crate::core::config::{self, env_enc_path, lock_path};
+use crate::core::crypto::{self, LockInfo};
 use anyhow::{Result, bail};
 // use dotenvy; // parsing implemented manually
-use crate::styles;
+use crate::cli::styles;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read};
@@ -62,18 +62,18 @@ fn load_key_for_dir(dir: &PathBuf) -> Result<[u8; 32]> {
     let base = config::base_dir()?;
 
     // Check Global Master Lock first
-    if crate::master_lock::is_master_lock_enabled() {
+    if crate::operations::master_lock::is_master_lock_enabled() {
         // Global Master Lock is enabled - use master password for ALL projects
         let master_password = match std::env::var("SAFEHOLD_MASTER_PASSWORD") {
             Ok(p) => p,
             Err(_) => {
-                crate::styles::info("🔒 Global Master Lock is active");
+                crate::cli::styles::info("🔒 Global Master Lock is active");
                 rpassword::prompt_password("Master Password: ")?
             }
         };
 
         // Verify master password
-        if !crate::master_lock::verify_master_password(&master_password)? {
+        if !crate::operations::master_lock::verify_master_password(&master_password)? {
             anyhow::bail!("❌ Invalid master password");
         }
 
@@ -161,9 +161,41 @@ pub fn cmd_list(args: ProjectTargetArgs) -> Result<()> {
 }
 
 /// Delete a key in a project (no-op if missing).
-pub fn cmd_delete(args: ProjectKeyArgs) -> Result<()> {
+pub fn cmd_delete(args: ProjectKeyArgsForce) -> Result<()> {
     let dir = resolve_set_dir(&args.project)?;
     let mut map = read_env_map(&dir)?;
+
+    if !map.contains_key(&args.key) {
+        styles::warn("Key not found");
+        return Ok(());
+    }
+
+    // Confirmation prompt (skip if force is true)
+    if !args.force {
+        use std::io::{self, Write};
+        styles::warn(format!(
+            "⚠️  Delete credential '{}' from project '{}'?",
+            args.key, args.project
+        ));
+        print!("Confirm (y/N): ");
+        io::stdout().flush().unwrap_or(());
+
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let input = input.trim().to_lowercase();
+                if input != "y" && input != "yes" {
+                    styles::info("❌ Deletion cancelled");
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                styles::info("❌ Deletion cancelled");
+                return Ok(());
+            }
+        }
+    }
+
     if map.remove(&args.key).is_some() {
         write_env_map(&dir, &map)?;
         styles::ok("Deleted");
@@ -481,9 +513,36 @@ pub fn cmd_global_list() -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error if key not found or deletion fails
-pub fn cmd_global_delete(args: GlobalKeyArgs) -> Result<()> {
+pub fn cmd_global_delete(args: GlobalKeyArgsForce) -> Result<()> {
     let dir = config::global_dir()?;
     let mut map = read_env_map(&dir)?;
+
+    if !map.contains_key(&args.key) {
+        bail!("❌ Key '{}' not found in global storage", args.key);
+    }
+
+    // Confirmation prompt (skip if force is true)
+    if !args.force {
+        use std::io::{self, Write};
+        styles::warn(format!("⚠️  Delete global credential '{}'?", args.key));
+        print!("Confirm (y/N): ");
+        io::stdout().flush().unwrap_or(());
+
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let input = input.trim().to_lowercase();
+                if input != "y" && input != "yes" {
+                    styles::info("❌ Deletion cancelled");
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                styles::info("❌ Deletion cancelled");
+                return Ok(());
+            }
+        }
+    }
 
     if map.remove(&args.key).is_none() {
         bail!("❌ Key '{}' not found in global storage", args.key);

@@ -3,7 +3,7 @@
 //! This module handles persistent settings for both CLI and GUI modes,
 //! storing user preferences separately from project configurations.
 
-use crate::config;
+use crate::core::config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;

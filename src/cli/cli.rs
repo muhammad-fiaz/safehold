@@ -53,7 +53,7 @@ pub enum Commands {
     ListProjects,
     /// 🗑️ Delete a credential project by ID or name
     #[command(visible_aliases = &["rm", "remove"])]
-    DeleteProject { id: String },
+    DeleteProject(DeleteProjectArgs),
     /// ➕ Add a key/value credential into a project
     #[command(visible_alias = "set")]
     Add(ProjectKeyValueArgs),
@@ -65,7 +65,7 @@ pub enum Commands {
     List(ProjectTargetArgs),
     /// ❌ Delete a credential from a project
     #[command(visible_aliases = &["del", "rm-key"])]
-    Delete(ProjectKeyArgs),
+    Delete(ProjectKeyArgsForce),
     /// ✏️ Update/modify a credential value in a project
     #[command(visible_aliases = &["modify", "change", "edit"])]
     Update(ProjectKeyValueArgs),
@@ -83,7 +83,7 @@ pub enum Commands {
     GlobalList,
     /// ❌ Delete a credential from global storage
     #[command(name = "global-delete", visible_aliases = &["gdel", "global-rm"])]
-    GlobalDelete(GlobalKeyArgs),
+    GlobalDelete(GlobalKeyArgsForce),
     /// ✏️ Update/modify a credential value in global storage
     #[command(name = "global-update", visible_aliases = &["gupdate", "global-modify"])]
     GlobalUpdate(GlobalKeyValueArgs),
@@ -131,6 +131,9 @@ pub enum Commands {
         #[arg(long, action=ArgAction::SetTrue, help = "🛤️ Automatically add SafeHold to system PATH")]
         add_path: bool,
     },
+    /// 🔄 Check for SafeHold updates from crates.io
+    #[command(name = "check-update", visible_aliases = &["update-check", "check-updates"])]
+    CheckUpdate,
 }
 
 /// Args for `create` command.
@@ -155,6 +158,17 @@ pub struct ProjectTargetArgs {
     pub project: String,
 }
 
+/// Args for deleting a project.
+#[derive(Args, Debug)]
+pub struct DeleteProjectArgs {
+    /// Project ID or name
+    #[arg(help = "📁 Project ID or name")]
+    pub id: String,
+    /// Skip confirmation prompt
+    #[arg(long, action=ArgAction::SetTrue, help = "🚨 Skip confirmation prompt")]
+    pub force: bool,
+}
+
 /// Args for commands that need a project and a key.
 #[derive(Args, Debug)]
 pub struct ProjectKeyArgs {
@@ -164,6 +178,20 @@ pub struct ProjectKeyArgs {
     /// Key name
     #[arg(long, short = 'k', help = "🔑 Credential key name")]
     pub key: String,
+}
+
+/// Args for commands that need a project and a key with force option.
+#[derive(Args, Debug)]
+pub struct ProjectKeyArgsForce {
+    /// Project ID or name
+    #[arg(long, short = 'p', help = "📁 Project ID or name")]
+    pub project: String,
+    /// Key name
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
+    pub key: String,
+    /// Skip confirmation prompt
+    #[arg(long, action=ArgAction::SetTrue, help = "🚨 Skip confirmation prompt")]
+    pub force: bool,
 }
 
 /// Args for commands that set a key to a value.
@@ -260,6 +288,20 @@ pub struct GlobalKeyArgs {
     pub key: String,
 }
 
+/// Args for global key operations with force option.
+///
+/// Used for operations that only need a key name for global credential storage,
+/// such as getting or deleting global credentials.
+#[derive(Args, Debug)]
+pub struct GlobalKeyArgsForce {
+    /// Key name
+    #[arg(long, short = 'k', help = "🔑 Credential key name")]
+    pub key: String,
+    /// Skip confirmation prompt
+    #[arg(long, action=ArgAction::SetTrue, help = "🚨 Skip confirmation prompt")]
+    pub force: bool,
+}
+
 /// Args for global key-value operations.
 ///
 /// Used for operations that need both a key and value for global credential storage,
@@ -285,7 +327,7 @@ pub fn build_cli() -> Cli {
 }
 
 /// Dispatch a parsed CLI to the appropriate handler.
-pub fn dispatch(cli: Cli) -> Result<()> {
+pub async fn dispatch(cli: Cli) -> Result<()> {
     // Initialize styles from global flags
     let use_color = match cli.color {
         ColorChoice::Auto => atty::is(atty::Stream::Stdout),
@@ -293,36 +335,36 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         ColorChoice::Never => false,
     };
     let mode = match cli.style {
-        StyleChoice::Fancy => crate::styles::RenderMode::Fancy,
-        StyleChoice::Plain => crate::styles::RenderMode::Plain,
+        StyleChoice::Fancy => crate::cli::styles::RenderMode::Fancy,
+        StyleChoice::Plain => crate::cli::styles::RenderMode::Plain,
     };
-    crate::styles::init(crate::styles::StyleOptions {
+    crate::cli::styles::init(crate::cli::styles::StyleOptions {
         mode,
         use_color,
         quiet: cli.quiet,
     });
     match cli.command {
-        Commands::Create(args) => crate::store::cmd_create(args),
-        Commands::ListProjects => crate::store::cmd_list_sets(),
-        Commands::DeleteProject { id } => crate::store::cmd_delete_set(&id),
-        Commands::Add(args) => crate::envops::cmd_add(args),
-        Commands::Get(args) => crate::envops::cmd_get(args),
-        Commands::List(args) => crate::envops::cmd_list(args),
-        Commands::Delete(args) => crate::envops::cmd_delete(args),
-        Commands::Update(args) => crate::envops::cmd_update(args),
-        Commands::Count(args) => crate::envops::cmd_count(args),
-        Commands::GlobalAdd(args) => crate::envops::cmd_global_add(args),
-        Commands::GlobalGet(args) => crate::envops::cmd_global_get(args),
-        Commands::GlobalList => crate::envops::cmd_global_list(),
-        Commands::GlobalDelete(args) => crate::envops::cmd_global_delete(args),
-        Commands::GlobalUpdate(args) => crate::envops::cmd_global_update(args),
-        Commands::Export(args) => crate::envops::cmd_export(args),
-        Commands::Run(args) => crate::envops::cmd_run(args),
-        Commands::ShowAll => crate::envops::cmd_show_all(),
-        Commands::Clean => crate::envops::cmd_clean(),
-        Commands::CleanCache { force } => crate::envops::cmd_clean_cache(force),
-        Commands::DeleteAll { force } => crate::envops::cmd_delete_all(force),
-        Commands::About => crate::envops::cmd_about(),
+        Commands::Create(args) => crate::core::store::cmd_create(args),
+        Commands::ListProjects => crate::core::store::cmd_list_sets(),
+        Commands::DeleteProject(args) => crate::core::store::cmd_delete_set(&args),
+        Commands::Add(args) => crate::operations::envops::cmd_add(args),
+        Commands::Get(args) => crate::operations::envops::cmd_get(args),
+        Commands::List(args) => crate::operations::envops::cmd_list(args),
+        Commands::Delete(args) => crate::operations::envops::cmd_delete(args),
+        Commands::Update(args) => crate::operations::envops::cmd_update(args),
+        Commands::Count(args) => crate::operations::envops::cmd_count(args),
+        Commands::GlobalAdd(args) => crate::operations::envops::cmd_global_add(args),
+        Commands::GlobalGet(args) => crate::operations::envops::cmd_global_get(args),
+        Commands::GlobalList => crate::operations::envops::cmd_global_list(),
+        Commands::GlobalDelete(args) => crate::operations::envops::cmd_global_delete(args),
+        Commands::GlobalUpdate(args) => crate::operations::envops::cmd_global_update(args),
+        Commands::Export(args) => crate::operations::envops::cmd_export(args),
+        Commands::Run(args) => crate::operations::envops::cmd_run(args),
+        Commands::ShowAll => crate::operations::envops::cmd_show_all(),
+        Commands::Clean => crate::operations::envops::cmd_clean(),
+        Commands::CleanCache { force } => crate::operations::envops::cmd_clean_cache(force),
+        Commands::DeleteAll { force } => crate::operations::envops::cmd_delete_all(force),
+        Commands::About => crate::operations::envops::cmd_about(),
         Commands::MasterLock { enable, disable } => {
             let action = if enable {
                 Some(true)
@@ -331,9 +373,13 @@ pub fn dispatch(cli: Cli) -> Result<()> {
             } else {
                 None
             };
-            crate::master_lock::cmd_master_lock(action)
+            crate::operations::master_lock::cmd_master_lock(action)
         }
-        Commands::Launch { gui } => crate::store::cmd_launch(gui),
-        Commands::Setup { add_path } => crate::store::cmd_setup(add_path),
+        Commands::Launch { gui } => crate::core::store::cmd_launch(gui),
+        Commands::Setup { add_path } => crate::core::store::cmd_setup(add_path),
+        Commands::CheckUpdate => {
+            crate::utils::update_checker::display_cli_update_check().await;
+            Ok(())
+        }
     }
 }

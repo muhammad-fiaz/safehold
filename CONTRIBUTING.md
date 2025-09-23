@@ -108,7 +108,44 @@ cargo clippy
 
 # Generate documentation
 cargo doc --open
+
+# Cross-platform building (requires targets installed)
+./build.sh          # Unix/Linux/macOS
+build.bat           # Windows
+
+# Build for specific target
+cargo build --target x86_64-pc-windows-msvc --release
+cargo build --target x86_64-apple-darwin --release --features gui
+cargo build --target x86_64-unknown-linux-gnu --release
 ```
+
+### Cross-Platform Development
+
+SafeHold supports multiple platforms with dedicated build scripts:
+
+- **Unix/Linux/macOS**: Use `./build.sh` for automated cross-compilation
+- **Windows**: Use `build.bat` for Windows-based cross-compilation
+- **GitHub Actions**: Automated builds for all platforms on release
+
+The build system creates binaries for:
+- Windows (x64 MSVC and GNU)
+- macOS (Intel x64 and Apple Silicon ARM64)
+- Linux (x64 GNU, ARM64, and MUSL static)
+
+### Update Checking System
+
+SafeHold includes an automatic update checking system:
+
+- **Background checking**: Non-blocking update checks on every command
+- **CLI command**: `safehold check-update` for manual checking
+- **GUI integration**: Update notifications in GUI with modal dialogs
+- **Version comparison**: Semantic version parsing and comparison
+- **Internet connectivity**: Graceful handling of offline scenarios
+
+When adding features that interact with updates:
+- Use the `utils::update_checker` module
+- Implement async functions with proper error handling
+- Test both online and offline scenarios
 
 ## How to Contribute
 
@@ -177,20 +214,20 @@ SafeHold includes several key areas for contribution:
 
 When adding new CLI commands to SafeHold:
 
-1. **Add to CLI structure** in `src/cli.rs`:
+1. **Add to CLI structure** in `src/cli/cli.rs`:
    - Add new command variant to `Commands` enum
    - Include descriptive help text and aliases
    - Add appropriate command line arguments
 
-2. **Implement command logic** in `src/envops.rs`:
+2. **Implement command logic** in `src/operations/envops.rs`:
    - Create new function following naming convention `cmd_<command_name>`
    - Add comprehensive docstring documentation
    - Include error handling and user feedback
 
-3. **Update dispatch logic** in `src/cli.rs`:
+3. **Update dispatch logic** in `src/cli/cli.rs`:
    - Add routing to your new function in the `dispatch` function
 
-4. **Add GUI support** if applicable in `src/ui.rs`:
+4. **Add GUI support** if applicable in `src/gui/ui.rs`:
    - Add UI elements and dialogs for the new functionality
    - Ensure consistency with existing GUI patterns
 
@@ -375,41 +412,60 @@ cargo test
 
 ```
 src/
-├── main.rs          # Entry point and application setup
-├── cli.rs           # CLI argument parsing and command dispatch
-│                   # - Contains all command definitions and argument structures
-│                   # - Includes comprehensive help text and command aliases
-│                   # - Dispatches to appropriate functions in envops.rs
-├── config.rs        # Configuration management and file paths
-│                   # - Handles SAFEHOLD_HOME environment variable
-│                   # - Manages app configuration and directory structure
-├── crypto.rs        # Encryption/decryption logic with AES-256-GCM
-├── store.rs         # Low-level storage operations for projects and credentials
-├── envops.rs        # High-level environment variable operations
-│                   # - All CLI command implementations (cmd_* functions)
-│                   # - Project CRUD operations
-│                   # - Global credential management
-│                   # - Count and statistics functionality
-│                   # - Comprehensive docstrings for all functions
-├── app_settings.rs  # Application settings management
-│                   # - Persistent GUI and CLI preferences storage
-│                   # - Security settings configuration
-│                   # - Session and interface preferences
-├── master_lock.rs   # Global Master Lock functionality
-│                   # - Unified password protection for ALL projects
-│                   # - Master password validation and management
-│                   # - Global security state management
-├── styles.rs        # Output formatting and styling
-│                   # - Terminal colors and spinner animations
-│                   # - Success, error, and warning message formatting
-│                   # - Progress indicators and visual feedback
-├── ui.rs            # GUI implementation (feature-gated with 'gui')
-│                   # - Main application window and tabs
-│                   # - Global credentials tab
-│                   # - Settings display with version/author info
-│                   # - Project and credential management dialogs
-├── install.rs       # Installation and setup functionality
-└── lib.rs           # Library interface (if needed)
+├── main.rs              # Entry point and application setup with async main
+├── core/                # Core functionality modules
+│   ├── mod.rs          # Core module declarations
+│   ├── config.rs       # Configuration management and file paths
+│   │                   # - Handles SAFEHOLD_HOME environment variable
+│   │                   # - Manages app configuration and directory structure
+│   │                   # - Version compatibility checking and migration
+│   ├── crypto.rs       # Encryption/decryption logic with AES-256-GCM
+│   └── store.rs        # Low-level storage operations for projects and credentials
+│                       # - GUI/CLI launch detection and routing
+├── cli/                # CLI interface modules
+│   ├── mod.rs          # CLI module declarations
+│   ├── cli.rs          # CLI argument parsing and command dispatch
+│   │                   # - Contains all command definitions and argument structures
+│   │                   # - Includes comprehensive help text and command aliases
+│   │                   # - Dispatches to appropriate functions in operations
+│   │                   # - Async command dispatch for update checking
+│   └── styles.rs       # Output formatting and styling
+│                       # - Terminal colors and spinner animations
+│                       # - Success, error, and warning message formatting
+│                       # - Progress indicators and visual feedback
+├── gui/                # GUI interface modules
+│   ├── mod.rs          # GUI module declarations
+│   └── ui.rs           # GUI implementation (feature-gated with 'gui')
+│                       # - Main application window and tabs
+│                       # - Global credentials tab
+│                       # - Settings display with version/author info
+│                       # - Project and credential management dialogs
+│                       # - Modal error and warning dialogs
+│                       # - Update notification integration
+├── operations/         # Business logic operations
+│   ├── mod.rs          # Operations module declarations
+│   ├── envops.rs       # High-level environment variable operations
+│   │                   # - All CLI command implementations (cmd_* functions)
+│   │                   # - Project CRUD operations
+│   │                   # - Global credential management
+│   │                   # - Count and statistics functionality
+│   │                   # - Comprehensive docstrings for all functions
+│   └── master_lock.rs  # Global Master Lock functionality
+│                       # - Unified password protection for ALL projects
+│                       # - Master password validation and management
+│                       # - Global security state management
+└── utils/              # Utility modules
+    ├── mod.rs          # Utils module declarations
+    ├── app_settings.rs # Application settings management
+    │                   # - Persistent GUI and CLI preferences storage
+    │                   # - Security settings configuration
+    │                   # - Session and interface preferences
+    ├── install.rs      # Installation and setup functionality
+    └── update_checker.rs # Update checking functionality
+                        # - Async update checking from crates.io
+                        # - Version comparison and notification
+                        # - CLI check-update command implementation
+                        # - GUI update notification integration
 
 tests/
 ├── integration_tests.rs # Comprehensive integration test suite

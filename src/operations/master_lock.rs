@@ -3,10 +3,10 @@
 //! When Global Master Lock is enabled, ALL projects (including individual projects and global)
 //! require the same master password for access. This provides unified security across all credentials.
 
-use crate::app_settings;
-use crate::config;
-use crate::crypto;
-use crate::styles;
+use crate::cli::styles;
+use crate::core::config;
+use crate::core::crypto;
+use crate::utils::app_settings;
 use anyhow::{Result, bail};
 use rpassword;
 use std::fs;

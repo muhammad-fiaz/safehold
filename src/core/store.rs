@@ -1,8 +1,8 @@
 //! Store-level commands: create/list/delete projects, setup, launch
-use crate::cli::CreateArgs;
-use crate::config::{self, SetMeta};
-use crate::crypto;
-use crate::styles;
+use crate::cli::cli::{CreateArgs, DeleteProjectArgs};
+use crate::cli::styles;
+use crate::core::config::{self, SetMeta};
+use crate::core::crypto;
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::process::Command;
@@ -106,23 +106,83 @@ pub fn cmd_list_sets() -> Result<()> {
 }
 
 /// Delete a project by id or the global space.
-pub fn cmd_delete_set(id: &str) -> Result<()> {
+pub fn cmd_delete_set(args: &DeleteProjectArgs) -> Result<()> {
     let mut cfg = config::load_config()?;
-    let (is_global, dir) = if id == "global" {
+    let (is_global, dir) = if args.id == "global" {
         (true, config::global_dir()?)
     } else {
-        (false, config::set_dir(id)?)
+        (false, config::set_dir(&args.id)?)
     };
+
+    // Check if project exists in config
+    let project_exists = if is_global {
+        cfg.global_locked
+    } else {
+        cfg.sets
+            .iter()
+            .any(|s| s.id == args.id || s.name == args.id)
+    };
+
+    if !project_exists && !dir.exists() {
+        bail!("❌ Project '{}' not found", args.id);
+    }
+
+    // Confirmation prompt (skip if force is true)
+    if !args.force {
+        use std::io::{self, Write};
+        let project_type = if is_global {
+            "global storage"
+        } else {
+            "project"
+        };
+        styles::warn(format!(
+            "⚠️  Delete {} '{}' and all its credentials?",
+            project_type, args.id
+        ));
+        if !is_global {
+            styles::warn("⚠️  This will permanently delete all credentials in this project!");
+        }
+        print!("Confirm (y/N): ");
+        io::stdout().flush().unwrap_or(());
+
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let input = input.trim().to_lowercase();
+                if input != "y" && input != "yes" {
+                    styles::info("❌ Deletion cancelled");
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                styles::info("❌ Deletion cancelled");
+                return Ok(());
+            }
+        }
+    }
+
+    // Delete directory if it exists
     if dir.exists() {
         fs::remove_dir_all(&dir).with_context(|| format!("delete {}", dir.display()))?;
     }
+
+    // Update config
     if !is_global {
-        cfg.sets.retain(|s| s.id != id && s.name != id);
+        cfg.sets.retain(|s| s.id != args.id && s.name != args.id);
     } else {
         cfg.global_locked = false;
     }
     config::save_config(&cfg)?;
-    styles::success(format!("🗑️ Deleted project '{id}' and all its credentials"));
+
+    styles::success(format!(
+        "🗑️ Deleted {} '{}' and all its credentials",
+        if is_global {
+            "global storage"
+        } else {
+            "project"
+        },
+        args.id
+    ));
     Ok(())
 }
 
@@ -149,7 +209,7 @@ pub fn cmd_launch(gui: bool) -> Result<()> {
             println!();
 
             styles::info("🚀 Launching SafeHold GUI...");
-            crate::ui::launch_gui()?;
+            crate::gui::ui::launch_gui()?;
             return Ok(());
         }
         #[cfg(not(feature = "gui"))]
@@ -164,7 +224,7 @@ pub fn cmd_launch(gui: bool) -> Result<()> {
     }
 
     styles::header("SafeHold Launch Options");
-    if crate::install::gui_available() {
+    if crate::utils::install::gui_available() {
         styles::bullet("🖥️ Launch GUI: safehold launch --gui");
     } else {
         styles::bullet("📝 CLI-only mode: use safehold commands");
@@ -272,7 +332,7 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
     }
 
     println!();
-    if crate::install::gui_available() {
+    if crate::utils::install::gui_available() {
         styles::info("🖥️ GUI available! Create shortcuts to launch with: safehold launch --gui");
     } else {
         styles::info(

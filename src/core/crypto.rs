@@ -25,8 +25,8 @@ const ARGON2_OUTPUT_SIZE: usize = 32; // 256 bits output
 
 // Default Argon2 parameters (sensible security defaults)
 const DEFAULT_ARGON2_M_COST: u32 = 19456; // 19 MiB
-const DEFAULT_ARGON2_T_COST: u32 = 2;    // 2 iterations
-const DEFAULT_ARGON2_P_COST: u32 = 1;    // 1 lane
+const DEFAULT_ARGON2_T_COST: u32 = 2; // 2 iterations
+const DEFAULT_ARGON2_P_COST: u32 = 1; // 1 lane
 
 /// Info needed to derive a key from a password using Argon2id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,7 +123,10 @@ pub fn derive_key_from_password(password: &str, lock: &LockInfo) -> Result<[u8; 
 }
 
 /// Derive a 32-byte key from `password` using a custom salt (for master lock).
-pub fn derive_key_from_password_and_salt(password: &str, salt: &[u8]) -> Result<[u8; AES_KEY_SIZE]> {
+pub fn derive_key_from_password_and_salt(
+    password: &str,
+    salt: &[u8],
+) -> Result<[u8; AES_KEY_SIZE]> {
     // Use consistent parameters for master lock derivation
     let params = argon2::Params::new(
         DEFAULT_ARGON2_M_COST,
@@ -155,8 +158,13 @@ pub fn create_lock(password: &str) -> Result<LockInfo> {
         t_cost: DEFAULT_ARGON2_T_COST,
         p_cost: DEFAULT_ARGON2_P_COST,
     }; // sensible defaults
-    let paramsx = argon2::Params::new(params.m_cost, params.t_cost, params.p_cost, Some(ARGON2_OUTPUT_SIZE))
-        .map_err(|e| anyhow!("params: {e}"))?;
+    let paramsx = argon2::Params::new(
+        params.m_cost,
+        params.t_cost,
+        params.p_cost,
+        Some(ARGON2_OUTPUT_SIZE),
+    )
+    .map_err(|e| anyhow!("params: {e}"))?;
     let argon = Argon2::new_with_secret(
         &[],
         argon2::Algorithm::Argon2id,

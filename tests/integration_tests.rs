@@ -98,7 +98,7 @@ fn test_project_lifecycle() -> Result<()> {
     assert!(output.contains("Total:"));
 
     // Test project deletion
-    let output = env.run_success(&["delete-project", "test-project"])?;
+    let output = env.run_success(&["delete-project", "test-project", "--force"])?;
     assert!(output.contains("Deleted") || output.contains("removed"));
 
     Ok(())
@@ -146,7 +146,14 @@ fn test_credential_management() -> Result<()> {
     assert!(output.trim() == "newsecret456");
 
     // Delete credential
-    env.run_success(&["delete", "--project", "cred-test", "--key", "API_KEY"])?;
+    env.run_success(&[
+        "delete",
+        "--project",
+        "cred-test",
+        "--key",
+        "API_KEY",
+        "--force",
+    ])?;
 
     // Verify deletion
     let _error = env.run_failure(&["get", "--project", "cred-test", "--key", "API_KEY"])?;
@@ -193,7 +200,7 @@ fn test_global_credentials() -> Result<()> {
     assert!(output.trim() == "updatedglobal456");
 
     // Delete global credential
-    env.run_success(&["global-delete", "--key", "GLOBAL_TOKEN"])?;
+    env.run_success(&["global-delete", "--key", "GLOBAL_TOKEN", "--force"])?;
 
     // Verify deletion
     let _error = env.run_failure(&["global-get", "--key", "GLOBAL_TOKEN"])?;
@@ -279,12 +286,19 @@ fn test_error_handling() -> Result<()> {
     ])?;
 
     // Test deleting non-existent credential
-    let _error = env.run_failure(&["delete", "--project", "nonexistent", "--key", "KEY"])?;
+    let _error = env.run_failure(&[
+        "delete",
+        "--project",
+        "nonexistent",
+        "--key",
+        "KEY",
+        "--force",
+    ])?;
 
     // Test global operations on non-existent keys
     let _error = env.run_failure(&["global-get", "--key", "NONEXISTENT"])?;
     let _error = env.run_failure(&["global-update", "--key", "NONEXISTENT", "--value", "val"])?;
-    let _error = env.run_failure(&["global-delete", "--key", "NONEXISTENT"])?;
+    let _error = env.run_failure(&["global-delete", "--key", "NONEXISTENT", "--force"])?;
 
     Ok(())
 }
@@ -388,7 +402,7 @@ fn test_version_information() -> Result<()> {
     // Test version flag
     let output = env.run_success(&["--version"])?;
     assert!(output.contains("safehold"));
-    assert!(output.contains("0.0.1"));
+    assert!(output.contains("0.0.2"));
 
     Ok(())
 }
@@ -421,7 +435,7 @@ fn test_about_command() -> Result<()> {
     // Test about command
     let output = env.run_success(&["about"])?;
     assert!(output.contains("SafeHold"));
-    assert!(output.contains("Version: 0.0.1"));
+    assert!(output.contains("Version: 0.0.2"));
     assert!(output.contains("Professional Credential Manager"));
     assert!(output.contains("Developer Information"));
     assert!(output.contains("Security Features"));
@@ -510,7 +524,7 @@ fn test_destructive_command_aliases() -> Result<()> {
     // Test about aliases
     let output = env.run_success(&["info"])?;
     assert!(output.contains("SafeHold") || output.contains("safehold"));
-    assert!(output.contains("Version: 0.0.1"));
+    assert!(output.contains("Version: 0.0.2"));
 
     Ok(())
 }
