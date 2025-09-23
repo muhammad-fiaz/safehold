@@ -1,5 +1,8 @@
 //! Environment operations: add/get/list/delete/export/run/show/clean
-use crate::cli::{ExportArgs, ProjectKeyArgs, ProjectKeyValueArgs, ProjectTargetArgs, RunArgs, CountArgs, GlobalKeyArgs, GlobalKeyValueArgs};
+use crate::cli::{
+    CountArgs, ExportArgs, GlobalKeyArgs, GlobalKeyValueArgs, ProjectKeyArgs, ProjectKeyValueArgs,
+    ProjectTargetArgs, RunArgs,
+};
 use crate::config::{self, env_enc_path, lock_path};
 use crate::crypto::{self, LockInfo};
 use anyhow::{Result, bail};
@@ -53,11 +56,11 @@ fn resolve_set_dir(id_or_name: &str) -> Result<PathBuf> {
     bail!("project not found: {}", id_or_name)
 }
 
-/// Load encryption key for dir (password-derived if locked, else app key). 
+/// Load encryption key for dir (password-derived if locked, else app key).
 /// Uses SAFEHOLD_PASSWORD if set. Checks Global Master Lock first.
 fn load_key_for_dir(dir: &PathBuf) -> Result<[u8; 32]> {
     let base = config::base_dir()?;
-    
+
     // Check Global Master Lock first
     if crate::master_lock::is_master_lock_enabled() {
         // Global Master Lock is enabled - use master password for ALL projects
@@ -68,19 +71,19 @@ fn load_key_for_dir(dir: &PathBuf) -> Result<[u8; 32]> {
                 rpassword::prompt_password("Master Password: ")?
             }
         };
-        
+
         // Verify master password
         if !crate::master_lock::verify_master_password(&master_password)? {
             anyhow::bail!("❌ Invalid master password");
         }
-        
+
         // Use master password to derive key for this project
         // We need a consistent salt for master lock, so use a fixed one
         let master_salt = b"safehold_master_lock_salt_v1";
         let key = crypto::derive_key_from_password_and_salt(&master_password, master_salt)?;
         return Ok(key);
     }
-    
+
     // Standard individual project locking
     let lock_path = lock_path(dir);
     if lock_path.exists() {
@@ -267,25 +270,29 @@ pub fn cmd_clean() -> Result<()> {
 }
 
 /// Update/modify a credential value in a project.
-/// 
+///
 /// This function allows updating an existing credential's value within a specific project.
 /// If the key doesn't exist, it will return an error. The value can be provided via
 /// command line argument or will be prompted securely from stdin if omitted.
-/// 
+///
 /// # Arguments
 /// * `args` - Contains the project identifier, key name, and optional new value
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if the key doesn't exist or operation fails
 pub fn cmd_update(args: ProjectKeyValueArgs) -> Result<()> {
     let dir = resolve_set_dir(&args.project)?;
     let mut map = read_env_map(&dir)?;
-    
+
     // Check if key exists
     if !map.contains_key(&args.key) {
-        bail!("❌ Key '{}' not found in project '{}'", args.key, args.project);
+        bail!(
+            "❌ Key '{}' not found in project '{}'",
+            args.key,
+            args.project
+        );
     }
-    
+
     let value = match args.value {
         Some(v) => v,
         None => {
@@ -297,40 +304,46 @@ pub fn cmd_update(args: ProjectKeyValueArgs) -> Result<()> {
             input.trim().to_string()
         }
     };
-    
+
     map.insert(args.key.clone(), value);
     write_env_map(&dir, &map)?;
-    styles::success(format!("Updated credential '{}' in project '{}'", args.key, args.project));
+    styles::success(format!(
+        "Updated credential '{}' in project '{}'",
+        args.key, args.project
+    ));
     Ok(())
 }
 
 /// Count credentials in projects with various display options.
-/// 
+///
 /// This function provides comprehensive statistics about credential storage:
 /// - Count for a specific project when `project` is provided
 /// - Count for all projects when no project is specified
 /// - Optional inclusion of global credentials in the total
 /// - Detailed breakdown showing per-project counts when `detailed` is true
-/// 
+///
 /// # Arguments
 /// * `args` - Contains optional project filter, global inclusion flag, and detail level
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if projects cannot be accessed
 pub fn cmd_count(args: CountArgs) -> Result<()> {
     let cfg = config::load_config()?;
-    
+
     if let Some(project) = args.project {
         // Count for specific project
         let dir = resolve_set_dir(&project)?;
         let map = read_env_map(&dir)?;
         let count = map.len();
-        styles::info(format!("📊 Project '{}' has {} credential(s)", project, count));
+        styles::info(format!(
+            "📊 Project '{}' has {} credential(s)",
+            project, count
+        ));
     } else {
         // Count for all projects
         let mut total = 0;
         let mut global_count = 0;
-        
+
         // Count global credentials
         if args.include_global {
             let gdir = config::global_dir()?;
@@ -339,7 +352,7 @@ pub fn cmd_count(args: CountArgs) -> Result<()> {
                 total += global_count;
             }
         }
-        
+
         // Count project credentials
         let mut project_counts = Vec::new();
         for s in &cfg.sets {
@@ -350,40 +363,44 @@ pub fn cmd_count(args: CountArgs) -> Result<()> {
                 project_counts.push((s.name.clone(), s.id.clone(), count));
             }
         }
-        
+
         styles::header("📊 Credential Count Summary");
         if args.include_global {
             styles::info(format!("🌍 Global: {} credential(s)", global_count));
             styles::divider();
         }
-        
+
         if args.detailed {
             for (name, _id, count) in project_counts {
                 styles::bullet(format!("📁 {}: {} credential(s)", name, count));
             }
             styles::divider();
         }
-        
-        styles::success(format!("📊 Total: {} credential(s) across {} project(s)", total, cfg.sets.len()));
+
+        styles::success(format!(
+            "📊 Total: {} credential(s) across {} project(s)",
+            total,
+            cfg.sets.len()
+        ));
     }
     Ok(())
 }
 
 /// Add a key/value credential to global storage.
-/// 
+///
 /// Global credentials are accessible from any project and provide a way to store
 /// commonly used credentials that don't belong to a specific project context.
 /// The value can be provided via command line or prompted securely from stdin.
-/// 
+///
 /// # Arguments
 /// * `args` - Contains the key name and optional value
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if global storage cannot be accessed
 pub fn cmd_global_add(args: GlobalKeyValueArgs) -> Result<()> {
     let dir = config::global_dir()?;
     let mut map = read_env_map(&dir)?;
-    
+
     let value = match args.value {
         Some(v) => v,
         None => {
@@ -395,7 +412,7 @@ pub fn cmd_global_add(args: GlobalKeyValueArgs) -> Result<()> {
             input.trim().to_string()
         }
     };
-    
+
     map.insert(args.key.clone(), value);
     write_env_map(&dir, &map)?;
     styles::success(format!("Added global credential '{}'", args.key));
@@ -403,19 +420,19 @@ pub fn cmd_global_add(args: GlobalKeyValueArgs) -> Result<()> {
 }
 
 /// Get a credential value from global storage.
-/// 
+///
 /// Retrieves and displays the value of a specific credential from global storage.
 /// This is useful for accessing commonly used credentials that are shared across projects.
-/// 
+///
 /// # Arguments
 /// * `args` - Contains the key name to retrieve
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success with value printed to stdout, or error if key not found
 pub fn cmd_global_get(args: GlobalKeyArgs) -> Result<()> {
     let dir = config::global_dir()?;
     let map = read_env_map(&dir)?;
-    
+
     match map.get(&args.key) {
         Some(value) => {
             println!("{}", value);
@@ -428,22 +445,22 @@ pub fn cmd_global_get(args: GlobalKeyArgs) -> Result<()> {
 }
 
 /// List all credentials in global storage.
-/// 
+///
 /// Displays all key-value pairs stored in the global credential storage with
 /// a formatted header and total count. Global credentials are accessible from
 /// any project context and provide shared credential storage.
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if global storage cannot be accessed
 pub fn cmd_global_list() -> Result<()> {
     let dir = config::global_dir()?;
     let map = read_env_map(&dir)?;
-    
+
     if map.is_empty() {
         styles::info("🌍 No global credentials found");
         return Ok(());
     }
-    
+
     styles::header("🌍 Global Credentials");
     let count = map.len();
     for (k, v) in &map {
@@ -454,49 +471,49 @@ pub fn cmd_global_list() -> Result<()> {
 }
 
 /// Delete a credential from global storage.
-/// 
+///
 /// Removes a specific credential key-value pair from global storage.
 /// This operation is permanent and cannot be undone. The function will
 /// return an error if the specified key doesn't exist.
-/// 
+///
 /// # Arguments
 /// * `args` - Contains the key name to delete
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if key not found or deletion fails
 pub fn cmd_global_delete(args: GlobalKeyArgs) -> Result<()> {
     let dir = config::global_dir()?;
     let mut map = read_env_map(&dir)?;
-    
+
     if map.remove(&args.key).is_none() {
         bail!("❌ Key '{}' not found in global storage", args.key);
     }
-    
+
     write_env_map(&dir, &map)?;
     styles::success(format!("Deleted global credential '{}'", args.key));
     Ok(())
 }
 
 /// Update/modify a credential value in global storage.
-/// 
+///
 /// Updates an existing credential's value in global storage. This function
 /// requires the key to already exist - use `cmd_global_add` for new credentials.
 /// The new value can be provided via command line or prompted securely from stdin.
-/// 
+///
 /// # Arguments
 /// * `args` - Contains the key name and optional new value
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if key doesn't exist or update fails
 pub fn cmd_global_update(args: GlobalKeyValueArgs) -> Result<()> {
     let dir = config::global_dir()?;
     let mut map = read_env_map(&dir)?;
-    
+
     // Check if key exists
     if !map.contains_key(&args.key) {
         bail!("❌ Key '{}' not found in global storage", args.key);
     }
-    
+
     let value = match args.value {
         Some(v) => v,
         None => {
@@ -508,7 +525,7 @@ pub fn cmd_global_update(args: GlobalKeyValueArgs) -> Result<()> {
             input.trim().to_string()
         }
     };
-    
+
     map.insert(args.key.clone(), value);
     write_env_map(&dir, &map)?;
     styles::success(format!("Updated global credential '{}'", args.key));
@@ -516,25 +533,25 @@ pub fn cmd_global_update(args: GlobalKeyValueArgs) -> Result<()> {
 }
 
 /// Helper function to ask for user confirmation for destructive operations
-/// 
+///
 /// # Arguments
 /// * `message` - The confirmation message to display
 /// * `force` - If true, skip confirmation and return true
-/// 
+///
 /// # Returns
 /// * `bool` - True if confirmed, false if cancelled
 fn ask_confirmation(message: &str, force: bool) -> bool {
     if force {
         return true;
     }
-    
+
     use std::io::{self, Write};
-    
+
     println!();
     styles::warn(message);
     print!("🤔 Type 'yes' to continue or anything else to cancel: ");
     io::stdout().flush().unwrap_or(());
-    
+
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_) => input.trim().to_lowercase() == "yes",
@@ -543,28 +560,28 @@ fn ask_confirmation(message: &str, force: bool) -> bool {
 }
 
 /// Clean cache and temporary files
-/// 
+///
 /// This command removes SafeHold cache files and temporary data but preserves
 /// all credential projects and data.
-/// 
+///
 /// # Arguments
 /// * `force` - Skip confirmation prompt if true
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if cleanup fails
 pub fn cmd_clean_cache(force: bool) -> Result<()> {
     let base_dir = config::base_dir()?;
     let cache_dirs = vec![
         base_dir.join("cache"),
-        base_dir.join("tmp"), 
+        base_dir.join("tmp"),
         base_dir.join("temp"),
         base_dir.join(".cache"),
     ];
-    
+
     // Count files to be cleaned
     let mut total_files = 0;
     let mut total_size = 0u64;
-    
+
     for cache_dir in &cache_dirs {
         if cache_dir.exists() {
             for entry in WalkDir::new(cache_dir).into_iter().filter_map(|e| e.ok()) {
@@ -577,27 +594,27 @@ pub fn cmd_clean_cache(force: bool) -> Result<()> {
             }
         }
     }
-    
+
     if total_files == 0 {
         styles::info("✨ No cache files found to clean");
         return Ok(());
     }
-    
+
     let size_mb = total_size as f64 / 1024.0 / 1024.0;
     let message = format!(
         "🗑️ This will delete {} cache files ({:.2} MB)\n⚠️ This action cannot be undone, but your credentials will NOT be affected.",
         total_files, size_mb
     );
-    
+
     if !ask_confirmation(&message, force) {
         styles::info("❌ Cache cleaning cancelled");
         return Ok(());
     }
-    
+
     // Perform cleanup
     let mut cleaned_files = 0;
     let mut cleaned_size = 0u64;
-    
+
     for cache_dir in &cache_dirs {
         if cache_dir.exists() {
             for entry in WalkDir::new(cache_dir).into_iter().filter_map(|e| e.ok()) {
@@ -614,38 +631,41 @@ pub fn cmd_clean_cache(force: bool) -> Result<()> {
             let _ = fs::remove_dir_all(cache_dir);
         }
     }
-    
+
     let cleaned_mb = cleaned_size as f64 / 1024.0 / 1024.0;
-    styles::success(format!("✅ Cleaned {} files ({:.2} MB) from cache", cleaned_files, cleaned_mb));
+    styles::success(format!(
+        "✅ Cleaned {} files ({:.2} MB) from cache",
+        cleaned_files, cleaned_mb
+    ));
     Ok(())
 }
 
 /// Delete ALL projects and data (VERY DESTRUCTIVE!)
-/// 
+///
 /// This command completely removes all SafeHold data including:
 /// - All credential projects
 /// - Global credentials  
 /// - Configuration files
 /// - Cache and temporary files
-/// 
+///
 /// # Arguments
 /// * `force` - Skip confirmation prompt if true (DANGEROUS!)
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if deletion fails
 pub fn cmd_delete_all(force: bool) -> Result<()> {
     let base_dir = config::base_dir()?;
-    
+
     if !base_dir.exists() {
         styles::info("✨ No SafeHold data found to delete");
         return Ok(());
     }
-    
+
     // Count all data
     let mut total_files = 0;
     let mut total_dirs = 0;
     let mut total_size = 0u64;
-    
+
     for entry in WalkDir::new(&base_dir).into_iter().filter_map(|e| e.ok()) {
         if entry.file_type().is_file() {
             total_files += 1;
@@ -656,9 +676,9 @@ pub fn cmd_delete_all(force: bool) -> Result<()> {
             total_dirs += 1;
         }
     }
-    
+
     let size_mb = total_size as f64 / 1024.0 / 1024.0;
-    
+
     println!();
     println!("┌─────────────────────────────────────────────────────────────────┐");
     println!("│                        🚨 DANGER ZONE 🚨                        │");
@@ -669,21 +689,24 @@ pub fn cmd_delete_all(force: bool) -> Result<()> {
     println!("│  • Configuration files                                         │");
     println!("│  • Cache and temporary files                                   │");
     println!("│                                                                 │");
-    println!("│  📊 Data to be deleted: {} files, {} directories ({:.2} MB)     │", total_files, total_dirs, size_mb);
+    println!(
+        "│  📊 Data to be deleted: {} files, {} directories ({:.2} MB)     │",
+        total_files, total_dirs, size_mb
+    );
     println!("│                                                                 │");
     println!("│  ⚠️ THIS ACTION CANNOT BE UNDONE!                              │");
     println!("│  ⚠️ ALL YOUR CREDENTIALS WILL BE LOST!                         │");
     println!("│                                                                 │");
     println!("└─────────────────────────────────────────────────────────────────┘");
-    
+
     if !force {
         use std::io::{self, Write};
-        
+
         println!();
         styles::error("🚨 FINAL WARNING: This will delete ALL your SafeHold data!");
         print!("💀 Type 'DELETE ALL MY DATA' to continue: ");
         io::stdout().flush().unwrap_or(());
-        
+
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
@@ -691,56 +714,56 @@ pub fn cmd_delete_all(force: bool) -> Result<()> {
                     styles::info("❌ Deletion cancelled - data preserved");
                     return Ok(());
                 }
-            },
+            }
             Err(_) => {
                 styles::info("❌ Deletion cancelled - data preserved");
                 return Ok(());
             }
         }
     }
-    
+
     // Perform complete deletion
     match fs::remove_dir_all(&base_dir) {
         Ok(()) => {
             styles::success("💥 All SafeHold data has been permanently deleted");
             styles::info("ℹ️ Run 'safehold setup' to reinitialize SafeHold");
-        },
+        }
         Err(e) => {
             bail!("❌ Failed to delete data: {}", e);
         }
     }
-    
+
     Ok(())
 }
 
 /// Show application information and details
-/// 
+///
 /// Displays comprehensive information about SafeHold including:
 /// - Version and build information
 /// - Developer and repository details
 /// - Features and capabilities
 /// - System information
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error if information cannot be retrieved
 pub fn cmd_about() -> Result<()> {
     let base_dir = config::base_dir().unwrap_or_else(|_| PathBuf::from("Not configured"));
     let config_exists = config::base_dir().map(|p| p.exists()).unwrap_or(false);
-    
+
     // Count projects and credentials
     let (total_projects, total_credentials) = if config_exists {
         match config::load_config() {
             Ok(cfg) => {
                 let projects = cfg.sets.len();
                 let mut credentials = 0;
-                
+
                 // Count global credentials
                 if let Ok(global_dir) = config::global_dir() {
                     if let Ok(map) = read_env_map(&global_dir) {
                         credentials += map.len();
                     }
                 }
-                
+
                 // Count project credentials
                 for project in &cfg.sets {
                     if let Ok(project_dir) = config::set_dir(&project.id) {
@@ -749,15 +772,15 @@ pub fn cmd_about() -> Result<()> {
                         }
                     }
                 }
-                
+
                 (projects, credentials)
-            },
+            }
             Err(_) => (0, 0),
         }
     } else {
         (0, 0)
     };
-    
+
     println!();
     println!("┌─────────────────────────────────────────────────────────────────┐");
     println!("│  ███████╗ █████╗ ███████╗███████╗██╗  ██╗ ██████╗ ██╗     ██████╗ │");
@@ -770,20 +793,20 @@ pub fn cmd_about() -> Result<()> {
     println!("│                🔐 Professional Credential Manager 🔐               │");
     println!("└─────────────────────────────────────────────────────────────────┘");
     println!();
-    
+
     println!("📋 Application Information:");
     println!("   Version: {}", env!("CARGO_PKG_VERSION"));
     println!("   Name: {}", env!("CARGO_PKG_NAME"));
     println!("   Description: {}", env!("CARGO_PKG_DESCRIPTION"));
     println!();
-    
+
     println!("👨‍💻 Developer Information:");
     println!("   Author: {}", env!("CARGO_PKG_AUTHORS"));
     println!("   Repository: {}", env!("CARGO_PKG_REPOSITORY"));
     println!("   Homepage: {}", env!("CARGO_PKG_HOMEPAGE"));
     println!("   License: {}", env!("CARGO_PKG_LICENSE"));
     println!();
-    
+
     println!("🔧 Build Information:");
     println!("   Rust Version: {}", env!("CARGO_PKG_RUST_VERSION"));
     println!("   Target: {}", std::env::consts::ARCH);
@@ -793,14 +816,21 @@ pub fn cmd_about() -> Result<()> {
     #[cfg(not(feature = "gui"))]
     println!("   GUI Support: ❌ Disabled");
     println!();
-    
+
     println!("📊 Current Status:");
-    println!("   Configuration: {}", if config_exists { "✅ Initialized" } else { "❌ Not configured" });
+    println!(
+        "   Configuration: {}",
+        if config_exists {
+            "✅ Initialized"
+        } else {
+            "❌ Not configured"
+        }
+    );
     println!("   Base Directory: {}", base_dir.display());
     println!("   Total Projects: {}", total_projects);
     println!("   Total Credentials: {}", total_credentials);
     println!();
-    
+
     println!("🔐 Security Features:");
     println!("   • AES-256-GCM encryption for data at rest");
     println!("   • Argon2id password hashing with salt");
@@ -808,7 +838,7 @@ pub fn cmd_about() -> Result<()> {
     println!("   • Cross-platform secure key derivation");
     println!("   • No plaintext storage of sensitive data");
     println!();
-    
+
     println!("🚀 Available Features:");
     println!("   • Multi-project credential management");
     println!("   • Global credential storage");
@@ -818,7 +848,7 @@ pub fn cmd_about() -> Result<()> {
     println!("   • Cross-platform compatibility");
     println!("   • Comprehensive backup and restore");
     println!();
-    
+
     println!("📚 Quick Commands:");
     println!("   safehold create <project>     - Create new project");
     println!("   safehold add <project> <key>  - Add credential");
@@ -827,10 +857,10 @@ pub fn cmd_about() -> Result<()> {
     println!("   safehold export <project>     - Export to .env");
     println!("   safehold --help               - Show all commands");
     println!();
-    
+
     if !config_exists {
         styles::warn("⚠️ SafeHold is not yet configured. Run 'safehold setup' to get started!");
     }
-    
+
     Ok(())
 }

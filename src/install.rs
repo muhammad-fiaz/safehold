@@ -1,6 +1,6 @@
+use crate::styles;
 use anyhow::Result;
 use std::io::{self, Write};
-use crate::styles;
 
 /// Installation configuration options
 #[derive(Debug, Clone)]
@@ -31,13 +31,16 @@ pub fn run_install_prompt() -> Result<InstallConfig> {
     println!("│  ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═════╝ │");
     println!("│                                                                     │");
     println!("│              🔐 Professional Environment Variable Manager 🔐       │");
-    println!("│                      Version {} - Welcome! 🎉                  │", env!("CARGO_PKG_VERSION"));
+    println!(
+        "│                      Version {} - Welcome! 🎉                  │",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("└─────────────────────────────────────────────────────────────────┘");
     println!();
 
     styles::info("Welcome to SafeHold - Secure Credential Manager!");
     println!();
-    
+
     styles::info("SafeHold can be used in two modes:");
     println!("  📝 CLI-only: Command-line interface (default, lightweight)");
     if cfg!(feature = "gui") {
@@ -116,10 +119,10 @@ pub fn is_first_run() -> bool {
 fn mark_installation_complete() -> Result<()> {
     let config_dir = crate::config::base_dir()?;
     std::fs::create_dir_all(&config_dir)?;
-    
+
     let install_marker = config_dir.join(".installed");
     std::fs::write(&install_marker, "installed")?;
-    
+
     Ok(())
 }
 

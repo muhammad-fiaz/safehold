@@ -23,7 +23,7 @@ fn main() {
 /// Build CLI, initialize styles, and execute command.
 fn run() -> Result<()> {
     let cmd = cli::build_cli();
-    
+
     // Check version compatibility and show upgrade messages
     if let Ok((is_new, old_version)) = config::check_version_compatibility() {
         if !is_new {
@@ -33,7 +33,7 @@ fn run() -> Result<()> {
             }
         }
     }
-    
+
     // Handle GUI flag for installation
     if cmd.gui {
         // Skip installation prompt if --gui flag is used
@@ -46,7 +46,7 @@ fn run() -> Result<()> {
         // Handle installation prompt for first-time users
         let _install_config = install::run_install_prompt()?;
     }
-    
+
     cli::dispatch(cmd)
 }
 
@@ -55,6 +55,6 @@ fn should_run_install_prompt(cmd: &cli::Cli) -> bool {
     // Don't run install prompt for help commands, setup, or if explicitly skipped
     match &cmd.command {
         cli::Commands::Setup { .. } => false, // Setup is manual
-        _ => install::is_first_run(), // Only run on first run
+        _ => install::is_first_run(),         // Only run on first run
     }
 }

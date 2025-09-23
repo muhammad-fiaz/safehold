@@ -1,13 +1,13 @@
 //! Application settings management for SafeHold
-//! 
+//!
 //! This module handles persistent settings for both CLI and GUI modes,
 //! storing user preferences separately from project configurations.
 
+use crate::config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use crate::config;
 
 /// Application settings that persist across sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +83,7 @@ impl Default for AppSettings {
                 confirm_destructive: true,
             },
             security: SecuritySettings {
-                global_master_lock: false, // Default is unlocked
+                global_master_lock: false,  // Default is unlocked
                 session_timeout_minutes: 0, // No timeout by default
                 clipboard_clear_seconds: 30,
                 require_confirmation: true,
@@ -101,30 +101,31 @@ pub fn settings_path() -> Result<PathBuf> {
 /// Load application settings from disk, creating defaults if not found
 pub fn load_settings() -> Result<AppSettings> {
     let path = settings_path()?;
-    
+
     if !path.exists() {
         // Create default settings file
         let settings = AppSettings::default();
         save_settings(&settings)?;
         return Ok(settings);
     }
-    
+
     let data = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-    let settings: AppSettings = serde_json::from_slice(&data)
-        .with_context(|| format!("parse {}", path.display()))?;
-    
+    let settings: AppSettings =
+        serde_json::from_slice(&data).with_context(|| format!("parse {}", path.display()))?;
+
     Ok(settings)
 }
 
 /// Save application settings to disk
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let path = settings_path()?;
-    
+
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create directory {}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create directory {}", parent.display()))?;
     }
-    
+
     let data = serde_json::to_vec_pretty(settings)?;
     fs::write(&path, data).with_context(|| format!("write {}", path.display()))?;
     Ok(())
@@ -132,7 +133,7 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
 
 /// Update GUI settings and save
 #[allow(dead_code)]
-pub fn update_gui_settings<F>(updater: F) -> Result<()> 
+pub fn update_gui_settings<F>(updater: F) -> Result<()>
 where
     F: FnOnce(&mut GuiSettings),
 {

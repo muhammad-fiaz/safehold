@@ -5,10 +5,10 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint};
 /// Top-level CLI options and subcommands.
 #[derive(Parser, Debug)]
 #[command(
-    name = "safehold", 
-    version, 
-    about = "🔐 SafeHold - Secure Cross-Platform Credential Manager", 
-    long_about = "🔐 SafeHold - Professional-grade credential manager with military-grade encryption, secure storage, and both CLI and GUI interfaces.", 
+    name = "safehold",
+    version,
+    about = "🔐 SafeHold - Secure Cross-Platform Credential Manager",
+    long_about = "🔐 SafeHold - Professional-grade credential manager with military-grade encryption, secure storage, and both CLI and GUI interfaces.",
     arg_required_else_help = true,
     help_template = "{before-help}{name} {version}\n{about}\n\n{usage-heading} {usage}\n\n{all-args}{after-help}"
 )]
@@ -176,7 +176,11 @@ pub struct ProjectKeyValueArgs {
     #[arg(long, short = 'k', help = "🔑 Credential key name")]
     pub key: String,
     /// Value (omit to read from stdin)
-    #[arg(long, short = 'v', help = "💎 Credential value (omit to read from stdin securely)")]
+    #[arg(
+        long,
+        short = 'v',
+        help = "💎 Credential value (omit to read from stdin securely)"
+    )]
     pub value: Option<String>,
 }
 
@@ -184,7 +188,11 @@ pub struct ProjectKeyValueArgs {
 #[derive(Args, Debug)]
 pub struct ExportArgs {
     /// Project ID or name; omit with --global for global
-    #[arg(long, short = 'p', help = "📁 Project ID or name (omit with --global for global project)")]
+    #[arg(
+        long,
+        short = 'p',
+        help = "📁 Project ID or name (omit with --global for global project)"
+    )]
     pub project: Option<String>,
     /// Export global creds
     #[arg(long, action=ArgAction::SetTrue, help = "🌍 Export from global project")]
@@ -210,12 +218,16 @@ pub struct RunArgs {
     #[arg(long, action=ArgAction::SetTrue, help = "🌍 Merge in credentials from global project")]
     pub with_global: bool,
     /// Command to run after '--'
-    #[arg(last = true, required = true, help = "🚀 Command to execute (place after '--')")]
+    #[arg(
+        last = true,
+        required = true,
+        help = "🚀 Command to execute (place after '--')"
+    )]
     pub command: Vec<String>,
 }
 
 /// Args for count command.
-/// 
+///
 /// Provides flexible credential counting with options for:
 /// - Counting specific projects or all projects
 /// - Including/excluding global credentials
@@ -223,7 +235,11 @@ pub struct RunArgs {
 #[derive(Args, Debug)]
 pub struct CountArgs {
     /// Project ID or name (omit to count all projects)
-    #[arg(long, short = 'p', help = "📁 Project ID or name (omit to count all projects)")]
+    #[arg(
+        long,
+        short = 'p',
+        help = "📁 Project ID or name (omit to count all projects)"
+    )]
     pub project: Option<String>,
     /// Include global in total count
     #[arg(long, action=ArgAction::SetTrue, help = "🌍 Include global credentials in count")]
@@ -234,7 +250,7 @@ pub struct CountArgs {
 }
 
 /// Args for global key operations.
-/// 
+///
 /// Used for operations that only need a key name for global credential storage,
 /// such as getting or deleting global credentials.
 #[derive(Args, Debug)]
@@ -245,7 +261,7 @@ pub struct GlobalKeyArgs {
 }
 
 /// Args for global key-value operations.
-/// 
+///
 /// Used for operations that need both a key and value for global credential storage,
 /// such as adding or updating global credentials. The value can be provided via
 /// command line or prompted from stdin if omitted.
@@ -255,7 +271,11 @@ pub struct GlobalKeyValueArgs {
     #[arg(long, short = 'k', help = "🔑 Credential key name")]
     pub key: String,
     /// Value (omit to read from stdin)
-    #[arg(long, short = 'v', help = "💎 Credential value (omit to read from stdin securely)")]
+    #[arg(
+        long,
+        short = 'v',
+        help = "💎 Credential value (omit to read from stdin securely)"
+    )]
     pub value: Option<String>,
 }
 
@@ -312,7 +332,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
                 None
             };
             crate::master_lock::cmd_master_lock(action)
-        },
+        }
         Commands::Launch { gui } => crate::store::cmd_launch(gui),
         Commands::Setup { add_path } => crate::store::cmd_setup(add_path),
     }

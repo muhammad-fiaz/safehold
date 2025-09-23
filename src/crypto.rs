@@ -4,8 +4,8 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow, bail};
+use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{SaltString};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use rand::{RngCore, rng};
@@ -170,9 +170,8 @@ pub fn argon2_hash(password: &[u8]) -> Result<String> {
     // Generate a random salt using the same RNG system as other parts
     let mut salt_bytes = [0u8; 16];
     rng().fill_bytes(&mut salt_bytes);
-    let salt = SaltString::encode_b64(&salt_bytes)
-        .map_err(|e| anyhow!("encode salt: {e}"))?;
-    
+    let salt = SaltString::encode_b64(&salt_bytes).map_err(|e| anyhow!("encode salt: {e}"))?;
+
     let argon2 = Argon2::default();
     let password_hash = argon2
         .hash_password(password, &salt)
@@ -183,8 +182,7 @@ pub fn argon2_hash(password: &[u8]) -> Result<String> {
 
 /// Verify a password against an Argon2 hash
 pub fn argon2_verify(password: &[u8], hash: &str) -> Result<bool> {
-    let parsed_hash = PasswordHash::new(hash)
-        .map_err(|e| anyhow!("parse hash: {e}"))?;
+    let parsed_hash = PasswordHash::new(hash).map_err(|e| anyhow!("parse hash: {e}"))?;
     let argon2 = Argon2::default();
     Ok(argon2.verify_password(password, &parsed_hash).is_ok())
 }

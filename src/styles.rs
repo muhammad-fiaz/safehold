@@ -133,7 +133,7 @@ pub fn header<S: AsRef<str>>(msg: S) {
     }
     let m = msg.as_ref();
     let line = "─".repeat(m.len() + 4);
-    
+
     if opts().use_color && matches!(opts().mode, RenderMode::Fancy) {
         println!("{}", format!("┌{}┐", line).cyan().bold());
         println!("{}", format!("│ {} │", m).cyan().bold());
@@ -168,7 +168,7 @@ pub fn kv<K: AsRef<str>, V: AsRef<str>>(key: K, value: V) {
     }
     let k = key.as_ref();
     let v = value.as_ref();
-    
+
     if opts().use_color && matches!(opts().mode, RenderMode::Fancy) {
         println!("  {} {}", format!("{}:", k).blue().bold(), v.white());
     } else if opts().use_color {
@@ -184,7 +184,7 @@ pub fn bullet<S: AsRef<str>>(msg: S) {
         return;
     }
     let m = msg.as_ref();
-    
+
     if opts().use_color && matches!(opts().mode, RenderMode::Fancy) {
         println!("  {} {}", "•".cyan().bold(), m);
     } else if opts().use_color {
@@ -223,12 +223,12 @@ pub fn progress_bar(total: u64) -> ProgressBar {
         let pb = ProgressBar::new(total);
         let sty = if o.use_color {
             ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg:.cyan}"
-            ).unwrap()
+                "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg:.cyan}",
+            )
+            .unwrap()
         } else {
-            ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} {msg}"
-            ).unwrap()
+            ProgressStyle::with_template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} {msg}")
+                .unwrap()
         };
         pb.set_style(sty);
         pb

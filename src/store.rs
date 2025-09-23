@@ -59,7 +59,11 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
     styles::success(format!(
         "Created project '{}' ({}) with ID: {}",
         args.name,
-        if args.lock { "🔒 locked" } else { "🔓 unlocked" },
+        if args.lock {
+            "🔒 locked"
+        } else {
+            "🔓 unlocked"
+        },
         id
     ));
     Ok(())
@@ -68,26 +72,34 @@ pub fn cmd_create(args: CreateArgs) -> Result<()> {
 /// List all projects (and global).
 pub fn cmd_list_sets() -> Result<()> {
     let cfg = config::load_config()?;
-    
+
     styles::header("SafeHold Projects");
     styles::divider();
-    
+
     if cfg.sets.is_empty() && !cfg.global_locked {
         styles::info("No projects found. Create one with: safehold create <name>");
         return Ok(());
     }
-    
+
     // Show global project
-    let lock_status = if cfg.global_locked { "🔒 Locked" } else { "🔓 Unlocked" };
+    let lock_status = if cfg.global_locked {
+        "🔒 Locked"
+    } else {
+        "🔓 Unlocked"
+    };
     styles::kv("GLOBAL", format!("global - {}", lock_status));
-    
+
     // Show all custom projects
     let project_count = cfg.sets.len();
     for s in cfg.sets {
-        let lock_status = if s.locked { "🔒 Locked" } else { "🔓 Unlocked" };
+        let lock_status = if s.locked {
+            "🔒 Locked"
+        } else {
+            "🔓 Unlocked"
+        };
         styles::kv(&s.id, format!("{} - {}", s.name, lock_status));
     }
-    
+
     println!();
     styles::info(format!("Total: {} project(s) + global", project_count));
     Ok(())
@@ -129,10 +141,13 @@ pub fn cmd_launch(gui: bool) -> Result<()> {
             println!("│  ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═════╝ │");
             println!("│                                                                     │");
             println!("│              🔐 Professional Environment Variable Manager 🔐       │");
-            println!("│                     Version {} - GUI Mode 🖥️                   │", env!("CARGO_PKG_VERSION"));
+            println!(
+                "│                     Version {} - GUI Mode 🖥️                   │",
+                env!("CARGO_PKG_VERSION")
+            );
             println!("└─────────────────────────────────────────────────────────────────┘");
             println!();
-            
+
             styles::info("🚀 Launching SafeHold GUI...");
             crate::ui::launch_gui()?;
             return Ok(());
@@ -140,12 +155,14 @@ pub fn cmd_launch(gui: bool) -> Result<()> {
         #[cfg(not(feature = "gui"))]
         {
             styles::error("GUI is not available in this installation");
-            styles::info("💡 To get GUI support, reinstall with: cargo install safehold --features gui");
+            styles::info(
+                "💡 To get GUI support, reinstall with: cargo install safehold --features gui",
+            );
             styles::info("Then run: safehold launch --gui");
             return Ok(());
         }
     }
-    
+
     styles::header("SafeHold Launch Options");
     if crate::install::gui_available() {
         styles::bullet("🖥️ Launch GUI: safehold launch --gui");
@@ -171,18 +188,21 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
     println!("│  ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═════╝ │");
     println!("│                                                                     │");
     println!("│              🔐 Professional Environment Variable Manager 🔐       │");
-    println!("│                        Version {} - Setup                       │", env!("CARGO_PKG_VERSION"));
+    println!(
+        "│                        Version {} - Setup                       │",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("└─────────────────────────────────────────────────────────────────┘");
     println!();
-    
+
     let pb = styles::spinner("🚀 Initializing SafeHold environment...");
     let base = config::ensure_layout()?;
     crypto::ensure_app_key(&base)?;
     styles::finish_spinner_success(pb, "SafeHold environment initialized");
-    
+
     println!();
     styles::header("PATH Configuration");
-    
+
     if add_path {
         // Support a dry-run env var for tests to avoid mutating user PATH.
         if std::env::var("SAFEHOLD_PATH_DRY_RUN").ok().as_deref() == Some("1") {
@@ -201,8 +221,10 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
                 match status {
                     Ok(st) if st.success() => {
                         styles::success("PATH updated for current user");
-                        styles::info("⚠️ You may need to restart your terminal for changes to take effect");
-                    },
+                        styles::info(
+                            "⚠️ You may need to restart your terminal for changes to take effect",
+                        );
+                    }
                     Ok(st) => styles::warn(format!(
                         "PATH update returned status {}. You may need admin privileges.",
                         st
@@ -242,16 +264,20 @@ pub fn cmd_setup(add_path: bool) -> Result<()> {
         }
         #[cfg(not(windows))]
         {
-            styles::bullet("Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc");
+            styles::bullet(
+                "Linux/macOS: echo 'export PATH=\"$HOME/.cargo/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc",
+            );
         }
         styles::info("Or run: safehold setup --add-path");
     }
-    
+
     println!();
     if crate::install::gui_available() {
         styles::info("🖥️ GUI available! Create shortcuts to launch with: safehold launch --gui");
     } else {
-        styles::info("📝 CLI-only installation. Reinstall with GUI: cargo install safehold --features gui");
+        styles::info(
+            "📝 CLI-only installation. Reinstall with GUI: cargo install safehold --features gui",
+        );
     }
     Ok(())
 }

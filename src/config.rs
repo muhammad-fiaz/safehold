@@ -132,24 +132,24 @@ pub fn version_file_path() -> Result<PathBuf> {
 pub fn check_version_compatibility() -> Result<(bool, Option<String>)> {
     let version_path = version_file_path()?;
     let current_version = env!("CARGO_PKG_VERSION");
-    
+
     if !version_path.exists() {
         // New installation
         save_current_version()?;
         return Ok((true, None));
     }
-    
+
     // Read existing version
     let version_content = fs::read_to_string(&version_path)?;
-    let version_info: VersionInfo = serde_json::from_str(&version_content)
-        .unwrap_or_else(|_| VersionInfo::default());
-    
+    let version_info: VersionInfo =
+        serde_json::from_str(&version_content).unwrap_or_else(|_| VersionInfo::default());
+
     if version_info.version != current_version {
         // Version changed - save new version and return old version
         save_current_version()?;
         return Ok((false, Some(version_info.version)));
     }
-    
+
     // Same version
     Ok((false, None))
 }
@@ -158,12 +158,12 @@ pub fn check_version_compatibility() -> Result<(bool, Option<String>)> {
 pub fn save_current_version() -> Result<()> {
     let version_path = version_file_path()?;
     let version_info = VersionInfo::default();
-    
+
     // Ensure directory exists
     if let Some(parent) = version_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    
+
     let content = serde_json::to_string_pretty(&version_info)?;
     fs::write(version_path, content)?;
     Ok(())
@@ -172,13 +172,19 @@ pub fn save_current_version() -> Result<()> {
 /// Display version compatibility message
 pub fn display_version_message(old_version: &str) -> Result<()> {
     use crate::styles;
-    
+
     println!();
     println!("┌─────────────────────────────────────────────────────────────────┐");
     println!("│                    🔄 SafeHold Version Update                    │");
     println!("│                                                                 │");
-    println!("│  Previous Version: {}                                        │", format!("{:<10}", old_version));
-    println!("│  Current Version:  {}                                        │", format!("{:<10}", env!("CARGO_PKG_VERSION")));
+    println!(
+        "│  Previous Version: {}                                        │",
+        format!("{:<10}", old_version)
+    );
+    println!(
+        "│  Current Version:  {}                                        │",
+        format!("{:<10}", env!("CARGO_PKG_VERSION"))
+    );
     println!("│                                                                 │");
     println!("│  ✅ Your data has been preserved and is compatible             │");
     println!("│  ✅ All existing functionality remains unchanged               │");
@@ -189,8 +195,11 @@ pub fn display_version_message(old_version: &str) -> Result<()> {
     println!("│  📊 Use 'safehold count' for credential statistics             │");
     println!("└─────────────────────────────────────────────────────────────────┘");
     println!();
-    
-    styles::success(&format!("🎉 Update completed successfully! Welcome to SafeHold v{}", env!("CARGO_PKG_VERSION")));
-    
+
+    styles::success(&format!(
+        "🎉 Update completed successfully! Welcome to SafeHold v{}",
+        env!("CARGO_PKG_VERSION")
+    ));
+
     Ok(())
 }
