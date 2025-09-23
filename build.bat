@@ -1,53 +1,27 @@
 @echo off
-setlocal enabledelayedexpansion
+REM SafeHold Simple Build Script
+REM For cross-platform builds, use build-universal.bat
 
-echo 🔨 SafeHold Cross-Platform Build Script
-echo ========================================
-
-REM Create dist directory
-if not exist dist mkdir dist
-
-REM Check if cargo is installed
-where cargo >nul 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo ❌ Cargo not found. Please install Rust.
-    exit /b 1
-)
-
-REM Function to build for a target
-:build_target
-set target=%1
-set name=%2
-
-echo 🔨 Building for %target%...
-
-REM Add target if not already installed
-rustup target add %target% >nul 2>nul
+echo � Building SafeHold (local development)...
 
 REM Build CLI version
-echo   📦 Building CLI version...
-cargo build --release --target %target% --no-default-features
-if %ERRORLEVEL% neq 0 (
-    echo ❌ Failed to build CLI version for %target%
+echo 📦 Building CLI version...
+cargo build --release --features cli
+if errorlevel 1 (
+    echo ❌ CLI build failed!
     exit /b 1
 )
 
 REM Build GUI version
-echo   🖥️ Building GUI version...
-cargo build --release --target %target% --features gui
-if %ERRORLEVEL% neq 0 (
-    echo ❌ Failed to build GUI version for %target%
+echo 🎨 Building GUI version...
+cargo build --release --features gui
+if errorlevel 1 (
+    echo ❌ GUI build failed!
     exit /b 1
 )
 
-REM Create target directory
-if not exist "dist\%name%" mkdir "dist\%name%"
-
-REM Copy binaries based on target OS
-echo %target% | findstr "windows" >nul
-if %ERRORLEVEL% equ 0 (
-    copy "target\%target%\release\safehold.exe" "dist\%name%\safehold-cli.exe" >nul
-    copy "target\%target%\release\safehold.exe" "dist\%name%\safehold-gui.exe" >nul
+echo ✅ Build completed successfully!
+echo 📁 Binaries available in: target\release\
 ) else (
     copy "target\%target%\release\safehold" "dist\%name%\safehold-cli" >nul
     copy "target\%target%\release\safehold" "dist\%name%\safehold-gui" >nul
