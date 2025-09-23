@@ -1765,14 +1765,47 @@ impl SafeHoldApp {
                                 match self.delete_type.as_str() {
                                     "project" => {
                                         if let Ok(project_dir) = config::set_dir(&self.delete_target) {
-                                            if let Err(e) = fs::remove_dir_all(&project_dir) {
-                                                self.add_notification(format!("Failed to delete project: {}", e), NotificationSeverity::Error);
-                                            } else {
-                                                self.add_notification(format!("Deleted project '{}'", self.delete_target), NotificationSeverity::Success);
-                                                self.refresh_config();
-                                                if self.selected.as_ref() == Some(&self.delete_target) {
-                                                    self.selected = None;
+                                            // Load current config to update it
+                                            if let Ok(mut cfg) = config::load_config() {
+                                                let mut deleted_successfully = false;
+
+                                                if project_dir.exists() {
+                                                    if let Err(e) = fs::remove_dir_all(&project_dir) {
+                                                        self.add_notification(format!("Failed to delete project: {}", e), NotificationSeverity::Error);
+                                                    } else {
+                                                        deleted_successfully = true;
+                                                    }
+                                                } else {
+                                                    // Directory doesn't exist, still consider it deleted
+                                                    deleted_successfully = true;
                                                 }
+
+                                                if deleted_successfully {
+                                                    // Remove from config if it's not global
+                                                    if self.delete_target != "global" {
+                                                        cfg.sets.retain(|s| s.id != self.delete_target && s.name != self.delete_target);
+                                                    } else {
+                                                        cfg.global_locked = false;
+                                                    }
+
+                                                    // Save updated config
+                                                    if let Err(e) = config::save_config(&cfg) {
+                                                        self.add_notification(format!("Failed to update config: {}", e), NotificationSeverity::Error);
+                                                    } else {
+                                                        let message = if project_dir.exists() {
+                                                            format!("Deleted project '{}'", self.delete_target)
+                                                        } else {
+                                                            format!("Deleted project '{}' (no data found)", self.delete_target)
+                                                        };
+                                                        self.add_notification(message, NotificationSeverity::Success);
+                                                        self.refresh_config();
+                                                        if self.selected.as_ref() == Some(&self.delete_target) {
+                                                            self.selected = None;
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                self.add_notification("Failed to load config for deletion".to_string(), NotificationSeverity::Error);
                                             }
                                         }
                                     },
